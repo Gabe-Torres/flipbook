@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Flipbook</title>
+<meta name="description" content="Open a PDF like a book. Pages, search, and bookmarks stay on this device.">
+<meta name="theme-color" content="#0f1115">
+<meta name="color-scheme" content="dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Flipbook">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div id="library">
+  <header class="libhead">
+    <img src="icons/icon-192.png" width="44" height="44" alt="">
+    <div class="libbrand">
+      <strong>Flipbook</strong>
+      <span>Open a PDF like a book</span>
+    </div>
+    <button class="offline-pill" type="button" title="Offline status"><span class="dot"></span><span class="txt">Offline…</span></button>
+  </header>
+
+  <div id="dropzone" class="dropzone">
+    <img src="icons/icon-192.png" width="72" height="72" alt="">
+    <h2>Open a PDF</h2>
+    <p>Choose a file, or drop one here. Rendering, search, and storage all happen in this browser. Books are never uploaded.</p>
+    <button id="pickFile" class="primary" type="button">Choose a PDF</button>
+    <input id="fileInput" type="file" accept="application/pdf,.pdf" multiple hidden>
+  </div>
+
+  <section class="libsection">
+    <div class="libsection-h">
+      <h3>Your books</h3>
+      <span id="libStorage" class="muted small"></span>
+    </div>
+    <div id="bookList" class="booklist"></div>
+    <p id="emptyLib" class="muted empty-lib">No books yet. A PDF you open is saved in this browser so it comes back offline.</p>
+  </section>
+  <p class="libfoot muted small">Nothing you open is uploaded. Clearing this site’s data in the browser deletes the copies saved here. The files on your device stay where they are.</p>
+</div>
+
+<div id="app">
+<header class="topbar">
+  <button id="btnLibrary" class="textbtn" type="button" title="Your books">Books</button>
+  <button id="btnSidebar" class="icon" type="button" title="Thumbnails (T)" aria-label="Thumbnails">☰</button>
+  <div class="title" id="bookTitle">Flipbook</div>
+  <div class="search" id="search">
+    <div class="searchrow">
+      <button class="icon sheet-close" type="button" data-close="search" aria-label="Close search">✕</button>
+      <input id="searchInput" type="search" placeholder="Search this book…  ( / )" autocomplete="off" enterkeyhint="search">
+    </div>
+    <div id="searchResults" class="results hidden"></div>
+  </div>
+  <div class="tools">
+    <button id="btnFirst" class="icon" type="button" title="First page (Home)" aria-label="First page">⏮</button>
+    <button id="btnPrev" class="icon" type="button" title="Previous (←)" aria-label="Previous page">◀</button>
+    <span class="pageinfo"><input id="pageInput" type="number" inputmode="numeric" min="1" value="1" aria-label="Page number"> <span>/ <b class="pageCount">–</b></span></span>
+    <button id="btnNext" class="icon" type="button" title="Next (→)" aria-label="Next page">▶</button>
+    <button id="btnLast" class="icon" type="button" title="Last page (End)" aria-label="Last page">⏭</button>
+    <button class="icon bm-toggle" type="button" title="Bookmark this page (B)" aria-label="Bookmark this page">☆</button>
+    <button class="icon" type="button" data-open="bookmarks" title="Bookmarks (M)" aria-label="Bookmarks">🔖</button>
+    <button id="btnZoom" class="icon" type="button" title="Zoom (Z / double-click)" aria-label="Zoom">🔍</button>
+    <button id="btnFull" class="icon" type="button" title="Fullscreen (F)" aria-label="Fullscreen">⛶</button>
+    <button class="offline-pill" type="button" data-open="menu" title="Offline status"><span class="dot"></span><span class="txt">Offline…</span></button>
+    <button class="icon" type="button" data-open="menu" title="Menu" aria-label="Menu">⋯</button>
+  </div>
+</header>
+
+<header class="phonebar">
+  <button id="btnLibraryPhone" class="textbtn" type="button">Books</button>
+  <div class="ptitle" id="bookTitlePhone">Flipbook</div>
+  <button class="offline-pill" type="button" data-open="menu"><span class="dot"></span><span class="txt">Offline…</span></button>
+</header>
+
+<aside id="sidebar" class="sidebar hidden">
+  <div class="sheethead"><b>Pages</b><button class="icon" type="button" data-close="sidebar" aria-label="Close">✕</button></div>
+  <div id="thumbs"></div>
+</aside>
+
+<main id="stage">
+  <div id="bookWrap"><div id="book"></div></div>
+  <button class="nav prev" id="navPrev" type="button" aria-label="Previous page">‹</button>
+  <button class="nav next" id="navNext" type="button" aria-label="Next page">›</button>
+</main>
+
+<nav class="bottombar">
+  <button type="button" data-open="sidebar" aria-label="Pages"><span>▦</span><small>Pages</small></button>
+  <button class="bb-prev" type="button" aria-label="Previous page"><span>◀</span><small>Prev</small></button>
+  <button class="bb-page" type="button" aria-label="Go to page"><span class="bb-num">1</span><small>of <b class="pageCount">–</b></small></button>
+  <button class="bb-next" type="button" aria-label="Next page"><span>▶</span><small>Next</small></button>
+  <button type="button" data-open="search" aria-label="Search"><span>🔍</span><small>Search</small></button>
+  <button class="bm-toggle" type="button" aria-label="Bookmark this page"><span>☆</span><small>Mark</small></button>
+  <button type="button" data-open="bookmarks" aria-label="Bookmarks"><span>🔖</span><small>Saved</small></button>
+  <button type="button" data-open="menu" aria-label="More"><span>⋯</span><small>More</small></button>
+</nav>
+
+<section id="searchSheet" class="sheet hidden" aria-label="Search"></section>
+
+<section id="bookmarksSheet" class="sheet panel hidden" aria-label="Bookmarks">
+  <div class="sheethead"><b>Bookmarks</b><span class="muted" id="bmCount"></span><button class="icon" type="button" data-close="bookmarks" aria-label="Close">✕</button></div>
+  <div class="sheetbody">
+    <button class="wide bm-add" type="button">＋ Bookmark current page</button>
+    <div id="bmList"></div>
+    <p class="muted small">Bookmarks stay in this browser, with this book. B adds or removes one. M opens this list.</p>
+  </div>
+</section>
+
+<section id="menuSheet" class="sheet panel hidden" aria-label="Menu">
+  <div class="sheethead"><b>Menu</b><button class="icon" type="button" data-close="menu" aria-label="Close">✕</button></div>
+  <div class="sheetbody">
+    <h4>Offline</h4>
+    <div class="offline-box">
+      <div class="offline-status">Checking…</div>
+      <p class="muted small" id="storageInfo"></p>
+    </div>
+    <h4>Layout</h4>
+    <div class="seg" id="layoutSeg">
+      <button type="button" data-layout="auto">Auto</button><button type="button" data-layout="single">One page</button><button type="button" data-layout="spread">Two pages</button>
+    </div>
+    <div class="fairy-opts">
+      <h4>Fairy companion <span class="muted">(N)</span></h4>
+      <div class="seg" id="fairySeg"><button type="button" data-fairy="on">On</button><button type="button" data-fairy="off">Off</button></div>
+      <div class="row" style="margin-top:8px"><label class="chk"><input type="checkbox" id="fairySound"> Twinkle sound when you click the fairy</label></div>
+      <p class="muted small fairy-note hidden">The fairy follows a mouse or trackpad, so it’s hidden on touch screens.</p>
+    </div>
+    <h4>Go to page</h4>
+    <div class="row"><input id="menuPage" type="number" inputmode="numeric" min="1" placeholder="Page #"><button id="menuGo" type="button">Go</button></div>
+    <h4>This book</h4>
+    <div class="row">
+      <button class="wide" id="btnDownloadPdf" type="button">Download original PDF</button>
+      <button class="wide" id="btnOcr" type="button">Recognize text (English OCR)</button>
+      <button class="wide" id="btnLibraryMenu" type="button">Back to your books</button>
+    </div>
+    <h4>Keyboard</h4>
+    <p class="muted small keys">← → turn · Home/End · G go to page · / search · B bookmark · M bookmarks · N fairy · Z zoom · T thumbnails · F fullscreen</p>
+    <h4>Saved data</h4>
+    <div class="row"><button id="btnResetData" class="danger" type="button">Clear bookmarks &amp; searches</button></div>
+    <p class="muted small" id="versionInfo"></p>
+  </div>
+</section>
+
+<div id="dialog" class="dialog hidden" role="dialog" aria-modal="true">
+  <form id="dlgForm" class="dlgcard">
+    <h3 id="dlgTitle">Bookmark</h3>
+    <label>Page <input id="dlgPage" type="number" inputmode="numeric" min="1"></label>
+    <label>Label (optional) <input id="dlgLabel" type="text" maxlength="80" placeholder="e.g. Chapter 3" enterkeyhint="done"></label>
+    <div class="row end">
+      <button type="button" id="dlgRemove" class="danger hidden">Remove</button>
+      <span class="grow"></span>
+      <button type="button" id="dlgCancel">Cancel</button>
+      <button type="submit" class="primary">Save</button>
+    </div>
+  </form>
+</div>
+
+<div id="zoom" class="zoom hidden">
+  <div class="zoombar">
+    <button id="zPrev" class="icon" type="button" aria-label="Previous page">◀</button>
+    <span id="zLabel"></span>
+    <button id="zNext" class="icon" type="button" aria-label="Next page">▶</button>
+    <button id="zOut" class="icon" type="button" aria-label="Zoom out">−</button>
+    <span id="zPct">100%</span>
+    <button id="zIn" class="icon" type="button" aria-label="Zoom in">+</button>
+    <button id="zFit" class="icon" type="button" aria-label="Fit">⤢</button>
+    <button id="zClose" class="icon" type="button" aria-label="Close zoom">✕</button>
+  </div>
+  <div id="zScroll" class="zscroll"><img id="zImg" alt=""></div>
+</div>
+</div>
+
+<div id="importer" class="dialog hidden" role="dialog" aria-modal="true" aria-label="Import progress">
+  <div class="dlgcard">
+    <h3 id="impTitle">Opening PDF</h3>
+    <p id="impStatus">Reading…</p>
+    <div class="bar"><i id="impBar"></i></div>
+    <p id="impDetail" class="muted small"></p>
+    <div class="row end"><button id="impCancel" type="button">Cancel</button></div>
+  </div>
+</div>
+
+<div id="ocrOffer" class="dialog hidden" role="dialog" aria-modal="true" aria-labelledby="ocrTitle">
+  <div class="dlgcard">
+    <h3 id="ocrTitle">No text to search</h3>
+    <p>This PDF looks scanned. The pages will still turn. English text recognition can make them searchable. It stays on this device and works offline after the app has loaded once.</p>
+    <div class="row end">
+      <button id="ocrSkip" type="button">Not now</button>
+      <button id="ocrRun" class="primary" type="button">Run OCR</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"><span class="msg"></span><button class="act hidden" type="button"></button></div>
+<script src="app-version.js"></script>
+<script src="vendor/page-flip.browser.js"></script>
+<script src="vendor/pdfjs/pdf.min.js"></script>
+<script src="vendor/tesseract/tesseract.min.js"></script>
+<script src="db.js"></script>
+<script src="importer.js"></script>
+<script src="app.js"></script>
+<script src="main.js"></script>
+<script src="fairy.js"></script>
+</body>
+</html>

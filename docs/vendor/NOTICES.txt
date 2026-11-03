@@ -1,0 +1,19 @@
+Flipbook vendors these libraries. Their license terms, not this note, apply.
+
+StPageFlip (vendor/page-flip.browser.js)
+  MIT License. See vendor/page-flip-LICENSE.txt.
+  Copyright (c) 2020 Nodlik (oleg.dydyshko@gmail.com).
+
+PDF.js (vendor/pdfjs/)
+  Apache License 2.0. See vendor/pdfjs/LICENSE.
+  Copyright Mozilla Foundation and contributors.
+
+Tesseract.js (vendor/tesseract/tesseract.min.js, worker.min.js)
+  Apache License 2.0. See vendor/tesseract/LICENSE.md.
+  Copyright (c) 2018-2022 Tesseract.js contributors.
+
+tesseract.js-core (vendor/tesseract/tesseract-core-*.wasm.js)
+  Apache License 2.0. See vendor/tesseract/CORE-LICENSE.
+
+English traineddata (vendor/tesseract/tessdata/eng.traineddata.gz)
+  The integer LSTM model published for Tesseract.js, Apache License 2.0.
