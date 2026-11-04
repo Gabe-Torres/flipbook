@@ -470,8 +470,11 @@
       const tag = event.target && event.target.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
       if ((event.key === 'n' || event.key === 'N') && window.Fairy && !event.metaKey && !event.ctrlKey && !event.altKey) {
-        if (!Fairy.supported) toast('The fairy needs a mouse or trackpad');
-        else toast(Fairy.toggle() ? 'Fairy on (N to hide)' : 'Fairy off (N to bring her back)');
+        if (!Fairy.supported) toast('A custom cursor needs a mouse or trackpad');
+        else {
+          Fairy.cycle();
+          toast(Fairy.cursor === 'off' ? 'Normal cursor (N to change)' : Fairy.label + ' cursor (N to change)');
+        }
       }
     });
   }

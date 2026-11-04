@@ -125,10 +125,14 @@
       <button type="button" data-layout="auto">Auto</button><button type="button" data-layout="single">One page</button><button type="button" data-layout="spread">Two pages</button>
     </div>
     <div class="fairy-opts">
-      <h4>Fairy companion <span class="muted">(N)</span></h4>
-      <div class="seg" id="fairySeg"><button type="button" data-fairy="on">On</button><button type="button" data-fairy="off">Off</button></div>
-      <div class="row" style="margin-top:8px"><label class="chk"><input type="checkbox" id="fairySound"> Twinkle sound when you click the fairy</label></div>
-      <p class="muted small fairy-note hidden">The fairy follows a mouse or trackpad, so it’s hidden on touch screens.</p>
+      <h4>Cursor <span class="muted">(N)</span></h4>
+      <div class="seg" id="fairySeg">
+        <button type="button" data-cursor="fairy">Fairy</button>
+        <button type="button" data-cursor="glow">Glow</button>
+        <button type="button" data-cursor="off">Off</button>
+      </div>
+      <div class="row" style="margin-top:8px"><label class="chk"><input type="checkbox" id="fairySound"> Twinkle sound when you click the companion</label></div>
+      <p class="muted small fairy-note hidden">A custom cursor follows a mouse or trackpad, so it stays off on touch screens.</p>
     </div>
     <h4>Go to page</h4>
     <div class="row"><input id="menuPage" type="number" inputmode="numeric" min="1" placeholder="Page #"><button id="menuGo" type="button">Go</button></div>
@@ -139,7 +143,7 @@
       <button class="wide" id="btnLibraryMenu" type="button">Back to your books</button>
     </div>
     <h4>Keyboard</h4>
-    <p class="muted small keys">← → turn · Home/End · G go to page · / search · B bookmark · M bookmarks · N fairy · Z zoom · T thumbnails · F fullscreen</p>
+    <p class="muted small keys">← → turn · Home/End · G go to page · / search · B bookmark · M bookmarks · N cursor · Z zoom · T thumbnails · F fullscreen</p>
     <h4>Saved data</h4>
     <div class="row"><button id="btnResetData" class="danger" type="button">Clear bookmarks &amp; searches</button></div>
     <p class="muted small" id="versionInfo"></p>

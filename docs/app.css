@@ -48,9 +48,12 @@ mark{background:rgba(212,175,55,.35);color:#fff;border-radius:2px;padding:0 1px}
 /* sidebar thumbs */
 .sidebar{position:fixed;top:var(--top);left:0;bottom:0;width:170px;background:rgba(18,21,27,.96);border-right:1px solid var(--line);overflow-y:auto;z-index:15;padding:10px;padding-left:calc(10px + var(--sal));overscroll-behavior:contain}
 .sidebar .sheethead{display:none}
-#thumbs{display:grid;grid-template-columns:1fr;gap:10px}
-.thumb{cursor:pointer;border:2px solid transparent;border-radius:6px;overflow:hidden;position:relative;background:#222}
-.thumb img{width:100%;display:block;aspect-ratio:1601/2080;object-fit:cover}
+#thumbs{display:grid;grid-template-columns:1fr;gap:10px;align-items:start}
+.thumb{cursor:pointer;border:2px solid transparent;border-radius:6px;overflow:hidden;position:relative;background:#222;width:100%}
+/* Height comes from padding, not aspect-ratio on the image. iOS Safari collapses
+   aspect-ratio images in this grid to a few pixels. */
+.thumb::before{content:"";display:block;padding-top:calc(100% / var(--page-aspect, 0.772))}
+.thumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
 .thumb span{position:absolute;bottom:4px;right:6px;font-size:11px;background:rgba(0,0,0,.7);padding:1px 6px;border-radius:8px}
 .thumb.current{border-color:var(--accent)}
 .thumb.hit::after{content:"";position:absolute;top:6px;left:6px;width:10px;height:10px;border-radius:50%;background:var(--accent2);box-shadow:0 0 0 2px #0008}
@@ -62,6 +65,9 @@ body.sb #stage{left:calc(170px + var(--sal))}
 #book{box-shadow:0 30px 80px rgba(0,0,0,.6);min-width:0!important;min-height:0!important}
 .page{background:#f4efe2;overflow:hidden}
 .page img{width:100%;height:100%;object-fit:contain;display:block;user-select:none;-webkit-user-drag:none;pointer-events:none}
+.turn-back{position:fixed;z-index:30;pointer-events:none;transform-origin:left center;overflow:hidden;background:#f4efe2;box-shadow:14px 0 28px rgba(0,0,0,.35)}
+.turn-back img{width:100%;height:100%;object-fit:cover;display:block}
+.turn-shade{position:absolute;inset:0;background:linear-gradient(90deg,rgba(0,0,0,.32),rgba(0,0,0,0) 34%);pointer-events:none}
 .page.--left{box-shadow:inset -18px 0 30px -18px rgba(0,0,0,.45)}
 .page.--right{box-shadow:inset 18px 0 30px -18px rgba(0,0,0,.45)}
 .page .ribbon{position:absolute;top:0;right:18px;width:22px;height:40px;background:var(--danger);clip-path:polygon(0 0,100% 0,100% 100%,50% 78%,0 100%);filter:drop-shadow(0 2px 2px #0008);z-index:3}

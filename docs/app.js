@@ -97,6 +97,7 @@
       startPage: Math.max(0, Math.min(N - 1, startAt || 0))
     });
     flip.loadFromHTML(nodes);
+    installBackwardTurn(flip);
     flip.on('flip', (e) => { if (myEpoch === epoch) onPage(e.data); });
     renderRibbons();
     onPage(flip.getCurrentPageIndex());
@@ -150,16 +151,86 @@
     saveState();
     updateBmToggle();
   }
+  let turningBack = false;
   function go(i, animate = true) {
     i = Math.max(0, Math.min(N - 1, i | 0));
     ensureLoaded(i);
-    if (!flip) return;
-    if (animate && Math.abs(i - current) <= 2) viaLib(() => flip.flip(i)); else flip.turnToPage(i);
-    onPage(i);
+    if (!flip || turningBack) return;
+    const from = flip.getCurrentPageIndex();
+    const distance = Math.abs(i - from);
+    const portrait = flip.getOrientation() === 'portrait';
+    if (animate && portrait && i < from) {
+      if (from - i === 1) animatePortraitBack(flip);
+      else flip.turnToPage(i);
+      return;
+    }
+    if (animate && distance > 0 && distance <= 2) viaLib(() => flip.flip(i));
+    else flip.turnToPage(i);
   }
   function viaLib(fn) { if (!flip) return; const st = flip.getSettings(); st.disableFlipByClick = false; try { fn(); } finally { st.disableFlipByClick = true; } }
-  const next = () => viaLib(() => flip.flipNext());
-  const prev = () => viaLib(() => flip.flipPrev());
+  const next = () => { if (turningBack) return; ensureLoaded(current + 1); viaLib(() => flip.flipNext()); };
+  const prev = () => { if (turningBack) return; ensureLoaded(current - 1); viaLib(() => flip.flipPrev()); };
+  // Portrait mode keeps the previous page off to the left, and the library curls
+  // backward on that hidden page. Swing the previous page in over the visible one.
+  // A wide spread already curls the left page in view, so that path stays.
+  function installBackwardTurn(book) {
+    const orig = book.flipPrev.bind(book);
+    book.flipPrev = (corner) => {
+      if (book.getOrientation() === 'portrait') animatePortraitBack(book);
+      else orig(corner);
+    };
+  }
+  function animatePortraitBack(book) {
+    if (turningBack || !book) return;
+    const from = book.getCurrentPageIndex();
+    if (from <= 0) return;
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      book.turnToPage(from - 1);
+      return;
+    }
+    const src = imgs[from - 1] && imgs[from - 1].getAttribute('src');
+    if (!src) {
+      turningBack = true;
+      ensureLoaded(from - 1).then(() => {
+        turningBack = false;
+        if (flip !== book || book.getCurrentPageIndex() !== from) return;
+        if (imgs[from - 1] && imgs[from - 1].getAttribute('src')) animatePortraitBack(book);
+        else book.turnToPage(from - 1);
+      });
+      return;
+    }
+    const host = document.getElementById('book');
+    const rect = host.getBoundingClientRect();
+    if (rect.width < 20 || rect.height < 20) { book.turnToPage(from - 1); return; }
+    const stamp = epoch;
+    turningBack = true;
+    const wrap = document.createElement('div');
+    wrap.className = 'turn-back';
+    wrap.style.left = rect.left + 'px';
+    wrap.style.top = rect.top + 'px';
+    wrap.style.width = rect.width + 'px';
+    wrap.style.height = rect.height + 'px';
+    const im = document.createElement('img');
+    im.src = src;
+    im.alt = '';
+    const shade = document.createElement('div');
+    shade.className = 'turn-shade';
+    wrap.append(im, shade);
+    document.body.appendChild(wrap);
+    const ms = (book.getSettings && book.getSettings().flippingTime) || 650;
+    const anim = wrap.animate([
+      { transform: 'perspective(1800px) rotateY(86deg)' },
+      { transform: 'perspective(1800px) rotateY(0deg)' }
+    ], { duration: ms, easing: 'linear', fill: 'forwards' });
+    const done = () => {
+      wrap.remove();
+      const still = stamp === epoch && flip === book;
+      turningBack = false;
+      if (still) book.turnToPage(from - 1);
+    };
+    anim.onfinish = done;
+    anim.oncancel = done;
+  }
 
   (function gestures() {
     const stage = $('#stage');
@@ -300,11 +371,13 @@
     for (let i = 0; i < N; i++) {
       const t = document.createElement('div'); t.className = 'thumb'; t.dataset.i = i;
       const im = document.createElement('img'); im.alt = ''; im.decoding = 'async';
+      const aspect = RATIO > 0.2 ? 1 / RATIO : 0.772;
+      im.width = 200; im.height = Math.max(1, Math.round(200 / aspect));
       const label = document.createElement('span'); label.textContent = String(i + 1);
       t.appendChild(im); t.appendChild(label);
       const index = i;
       SESSION.getThumbUrl(index).then((url) => { if (myEpoch === epoch && url) im.src = url; }).catch(() => {});
-      t.onclick = () => { go(index, false); if (phone) closeSheet('sidebar'); };
+      t.onclick = () => { go(index); if (phone) closeSheet('sidebar'); };
       frag.appendChild(t);
     }
     box.appendChild(frag);
@@ -406,7 +479,7 @@
       el.onclick = (e) => {
         if (e.target.closest('.edit')) { openBmDialog(p); return; }
         if (e.target.closest('.del')) { removeBookmark(p); return; }
-        go(p, false); if (phone) closeSheet('bookmarks');
+        go(p); if (phone) closeSheet('bookmarks');
       };
     });
   }
@@ -463,7 +536,7 @@
     $$('.result', box).forEach((r) => {
       const i = +r.dataset.i;
       SESSION.getThumbUrl(i).then((url) => { if (myEpoch === epoch && url) r.querySelector('img').src = url; }).catch(() => {});
-      r.onclick = (e) => { e.stopPropagation(); addRecent(q); setActive(+r.dataset.k); go(+r.dataset.i, false); if (phone) closeSheet('search'); };
+      r.onclick = (e) => { e.stopPropagation(); addRecent(q); setActive(+r.dataset.k); go(+r.dataset.i); if (phone) closeSheet('search'); };
     });
   }
   function setActive(k) {
@@ -478,7 +551,7 @@
     const menuPage = $('#menuPage');
     if (menuPage) menuPage.max = N;
     if (window.Fairy) {
-      $$('#fairySeg button').forEach((b) => b.classList.toggle('on', (b.dataset.fairy === 'on') === Fairy.on));
+      $$('#fairySeg button').forEach((b) => b.classList.toggle('on', b.dataset.cursor === Fairy.cursor));
       $('#fairySound').checked = Fairy.sound;
       $('.fairy-note').classList.toggle('hidden', Fairy.supported);
     }
@@ -524,7 +597,7 @@
     $('#menuGo').onclick = () => { const v = +$('#menuPage').value; if (v) { go(v - 1, false); closeSheet('menu'); } };
     $('#menuPage').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#menuGo').click(); });
     $$('#layoutSeg button').forEach((b) => b.onclick = () => { state.layout = b.dataset.layout; saveState(); renderMenu(); relayout(true); });
-    $$('#fairySeg button').forEach((b) => b.onclick = () => { if (window.Fairy) { Fairy.set(b.dataset.fairy === 'on'); renderMenu(); } });
+    $$('#fairySeg button').forEach((b) => b.onclick = () => { if (window.Fairy) { Fairy.setCursor(b.dataset.cursor); renderMenu(); } });
     $('#fairySound').onchange = (e) => { if (window.Fairy) Fairy.setSound(e.target.checked); };
     $('#btnResetData').onclick = () => {
       if (!confirm('Clear bookmarks and recent searches for this book?')) return;
@@ -575,8 +648,11 @@
         case 'm': case 'M': openSheet('bookmarks'); break;
         case 'n': case 'N':
           if (window.Fairy) {
-            if (!Fairy.supported) toast('The fairy needs a mouse or trackpad');
-            else toast(Fairy.toggle() ? 'Fairy on (N to hide)' : 'Fairy off (N to bring her back)');
+            if (!Fairy.supported) toast('A custom cursor needs a mouse or trackpad');
+            else {
+              Fairy.cycle();
+              toast(Fairy.cursor === 'off' ? 'Normal cursor (N to change)' : Fairy.label + ' cursor (N to change)');
+            }
             renderMenu();
           }
           break;
@@ -603,6 +679,7 @@
     SESSION = session;
     epoch++;
     RATIO = session.ratio > 0.2 && session.ratio < 5 ? session.ratio : 1.35;
+    document.documentElement.style.setProperty('--page-aspect', String(1 / RATIO));
     applyTexts(session.texts || []);
     Object.assign(state, {
       page: session.state && session.state.page || 0,

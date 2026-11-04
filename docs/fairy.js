@@ -1,11 +1,18 @@
-/* Glowing fairy companion — an original drawing (canvas).
-   pointer-events:none overlay; follows the mouse with a spring; idles, wanders, sparkles.
-   Hidden on touch-only devices. Toggle: N key or Menu › Fairy. Saved in localStorage.
+/* Cursor companions — original canvas drawings.
+   pointer-events:none overlay; follows the mouse with a spring.
+   Hidden on touch-only devices. N cycles Fairy, Glow, and Off. Saved in localStorage.
    Respects prefers-reduced-motion. */
 (() => {
   'use strict';
   const KEY = 'flipbook.fairy';
-  const load = () => { try { return Object.assign({ on: true, sound: false }, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) { return { on: true, sound: false }; } };
+  const CURSORS = ['fairy', 'glow', 'off'];
+  const load = () => {
+    let raw = {};
+    try { raw = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (e) {}
+    let cursor = raw.cursor;
+    if (!CURSORS.includes(cursor)) cursor = raw.on === false ? 'off' : 'fairy';
+    return { cursor, sound: !!raw.sound };
+  };
   const cfg = load();
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(cfg)); } catch (e) {} };
   const mqFine = matchMedia('(any-pointer: fine)');
@@ -78,7 +85,8 @@
     const t = (now - t0) / 1000, c = calm();
     const idle = (now - mouse.t) / 1000;
     let tx = mouse.x + OFF.x, ty = mouse.y + OFF.y;
-    if (idle > 1.2 && !c) { const r = Math.min(1, (idle - 1.2) / 1.5) * 34;
+    const wander = cfg.cursor === 'glow' ? 16 : 34;
+    if (idle > 1.2 && !c && cfg.cursor === 'fairy') { const r = Math.min(1, (idle - 1.2) / 1.5) * wander;
       tx += Math.sin(t * 0.9) * r + Math.sin(t * 2.3) * r * 0.3; ty += Math.cos(t * 0.7) * r * 0.6 + Math.sin(t * 1.9) * r * 0.25; }
     const k = c ? 18 : 42, d = c ? 9 : 10.5;
     v.x += ((tx - p.x) * k - v.x * d) * dt; v.y += ((ty - p.y) * k - v.y * d) * dt;
@@ -117,12 +125,14 @@
     ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, R * 1.6, 0, 7); ctx.fill();
     const flap = c ? 0.75 + 0.1 * Math.sin(t * 4) : 0.55 + 0.45 * Math.abs(Math.sin(t * (speed > 150 ? 34 : 22)));
     const tilt = Math.max(-0.45, Math.min(0.45, v.x / 1400));
-    ctx.save(); ctx.translate(x, y); ctx.rotate(tilt);
-    for (const side of [-1, 1]) {
-      wing(side, -0.5, 20, 9, flap, 0.42);
-      wing(side, 0.6, 13, 6.5, flap * 0.9, 0.34);
+    if (cfg.cursor === 'fairy') {
+      ctx.save(); ctx.translate(x, y); ctx.rotate(tilt);
+      for (const side of [-1, 1]) {
+        wing(side, -0.5, 20, 9, flap, 0.42);
+        wing(side, 0.6, 13, 6.5, flap * 0.9, 0.34);
+      }
+      ctx.restore();
     }
-    ctx.restore();
     ctx.globalCompositeOperation = 'lighter';
     g = ctx.createRadialGradient(x - 1.5, y - 1.5, 0, x, y, 11);
     g.addColorStop(0, `rgba(255,255,255,${fade})`);
@@ -150,18 +160,34 @@
   }
 
   const running = () => !!raf;
-  function start() { if (raf || !cfg.on || !supported() || document.hidden) return; cv.style.display = 'block'; last = 0; raf = requestAnimationFrame(step); }
+  function start() { if (raf || cfg.cursor === 'off' || !supported() || document.hidden) return; cv.style.display = 'block'; last = 0; raf = requestAnimationFrame(step); }
   function stop(hide = true) { if (raf) cancelAnimationFrame(raf); raf = 0; if (hide) { cv.style.display = 'none'; sparks = []; } }
-  function sync() { if (cfg.on && supported()) start(); else stop(); }
+  function sync() { if (cfg.cursor !== 'off' && supported()) start(); else stop(); }
   document.addEventListener('visibilitychange', () => { if (document.hidden) stop(false); else sync(); });
   (mqFine.addEventListener ? mqFine.addEventListener('change', sync) : mqFine.addListener(sync));
 
+  const labels = { fairy: 'Fairy', glow: 'Glow', off: 'Normal cursor' };
   window.Fairy = {
-    get on() { return cfg.on; }, get sound() { return cfg.sound; }, get supported() { return supported(); }, get running() { return running(); },
+    get cursor() { return cfg.cursor; },
+    get on() { return cfg.cursor !== 'off'; },
+    get sound() { return cfg.sound; },
+    get supported() { return supported(); },
+    get running() { return running(); },
+    get label() { return labels[cfg.cursor] || 'Cursor'; },
     get pos() { return { x: Math.round(p.x), y: Math.round(p.y) }; },
-    set(on) { cfg.on = !!on; save(); sync(); document.dispatchEvent(new CustomEvent('fairychange')); return cfg.on; },
-    toggle() { return this.set(!cfg.on); },
-    setSound(on) { cfg.sound = !!on; save(); if (on) twinkle(); document.dispatchEvent(new CustomEvent('fairychange')); }
+    setCursor(cursor) {
+      cfg.cursor = CURSORS.includes(cursor) ? cursor : 'off';
+      save(); sync();
+      document.dispatchEvent(new CustomEvent('fairychange'));
+      return cfg.cursor;
+    },
+    set(on) { return this.setCursor(on ? 'fairy' : 'off') !== 'off'; },
+    cycle() {
+      const i = CURSORS.indexOf(cfg.cursor);
+      return this.setCursor(CURSORS[(i + 1) % CURSORS.length]);
+    },
+    toggle() { return this.cycle() !== 'off'; },
+    setSound(on) { cfg.sound = !!on; save(); if (on && cfg.cursor !== 'off') twinkle(); document.dispatchEvent(new CustomEvent('fairychange')); }
   };
   sync();
 })();
