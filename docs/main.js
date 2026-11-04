@@ -221,18 +221,21 @@
     let books = [];
     try { books = await BookDB.listBooks(); } catch (e) {}
     if (empty) empty.hidden = books.length > 0;
-    books.forEach((book) => {
+    for (const book of books) {
       const card = document.createElement('article');
       card.className = 'bookcard';
       card.dataset.id = book.id;
       const img = document.createElement('img');
       img.className = 'cover';
       img.alt = '';
-      if (book.cover) {
-        const url = URL.createObjectURL(book.cover);
-        coverUrls.push(url);
-        img.src = url;
-      }
+      try {
+        const cover = await BookDB.getCover(book.id);
+        if (cover) {
+          const url = URL.createObjectURL(cover);
+          coverUrls.push(url);
+          img.src = url;
+        }
+      } catch (e) {}
       const meta = document.createElement('div');
       meta.className = 'meta';
       const heading = document.createElement('h3');
@@ -265,7 +268,7 @@
         openBook(book.id);
       });
       list.appendChild(card);
-    });
+    }
     await refreshStorageLabels();
   }
 

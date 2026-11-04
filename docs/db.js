@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   const DB_NAME = 'flipbook';
-  const DB_VERSION = 1;
+  const DB_VERSION = 2;
   let dbp = null;
   const queues = new Map();
 
@@ -29,6 +29,7 @@
           texts.createIndex('byBook', 'bookId', { unique: false });
         }
         if (!db.objectStoreNames.contains('pdfs')) db.createObjectStore('pdfs', { keyPath: 'bookId' });
+        if (!db.objectStoreNames.contains('covers')) db.createObjectStore('covers', { keyPath: 'bookId' });
       };
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => {
@@ -47,8 +48,14 @@
       try { fn(stores, tx); }
       catch (err) { reject(err); try { tx.abort(); } catch (e) {} return; }
       tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error || new Error('Storage write failed'));
-      tx.onabort = () => reject(tx.error || new Error('Storage write was aborted'));
+      tx.onerror = (event) => {
+        const err = tx.error || (event && event.target && event.target.error);
+        reject(err || new Error('Storage write failed'));
+      };
+      tx.onabort = (event) => {
+        const err = tx.error || (event && event.target && event.target.error);
+        reject(err || new Error('Storage write was aborted'));
+      };
     });
   }
 
@@ -64,7 +71,44 @@
     return req(db.transaction('books').objectStore('books').get(id));
   }
 
+  async function copyBlob(blob) {
+    if (!blob || typeof blob.arrayBuffer !== 'function' || !blob.size) return null;
+    try {
+      const bytes = await blob.arrayBuffer();
+      if (!bytes || !bytes.byteLength) return null;
+      return new Blob([bytes], { type: blob.type || 'image/jpeg' });
+    } catch (e) {
+      return null;
+    }
+  }
+
+  async function putCover(bookId, blob) {
+    const copy = await copyBlob(blob);
+    if (!copy) return null;
+    const db = await open();
+    await txDone(db, ['covers'], 'readwrite', (stores) => { stores.covers.put({ bookId, blob: copy }); });
+    return copy;
+  }
+
+  async function getCover(bookId) {
+    const db = await open();
+    const row = await req(db.transaction('covers').objectStore('covers').get(bookId));
+    if (row && row.blob && row.blob.size) return copyBlob(row.blob);
+    const book = await getBook(bookId);
+    if (book && book.cover && book.cover.size) {
+      const copy = await putCover(bookId, book.cover);
+      if (copy) return copy;
+    }
+    const page = await getPage(bookId, 0);
+    if (page && page.thumb && page.thumb.size) return putCover(bookId, page.thumb);
+    return null;
+  }
+
   async function putBook(book) {
+    if (book && book.cover) {
+      await putCover(book.id, book.cover);
+      delete book.cover;
+    }
     const db = await open();
     await txDone(db, ['books'], 'readwrite', (stores) => { stores.books.put(book); });
     return book;
@@ -84,8 +128,13 @@
   }
 
   async function putPage(record) {
+    const image = await copyBlob(record.image);
+    const thumb = await copyBlob(record.thumb);
+    if (!image || !thumb) throw new Error('Could not store a page image');
     const db = await open();
-    await txDone(db, ['pages'], 'readwrite', (stores) => { stores.pages.put(record); });
+    await txDone(db, ['pages'], 'readwrite', (stores) => {
+      stores.pages.put({ bookId: record.bookId, index: record.index, image, thumb });
+    });
   }
 
   async function putText(bookId, index, text) {
@@ -125,9 +174,10 @@
 
   async function deleteBook(id) {
     const db = await open();
-    await txDone(db, ['books', 'pages', 'texts', 'pdfs'], 'readwrite', (stores) => {
+    await txDone(db, ['books', 'pages', 'texts', 'pdfs', 'covers'], 'readwrite', (stores) => {
       stores.books.delete(id);
       stores.pdfs.delete(id);
+      stores.covers.delete(id);
       const wipe = (index) => {
         const cursor = index.openCursor(IDBKeyRange.only(id));
         cursor.onsuccess = () => {
@@ -147,8 +197,8 @@
     const books = await listBooks();
     const ids = new Set(books.map((book) => book.id));
     const db = await open();
-    await txDone(db, ['pages', 'texts', 'pdfs'], 'readwrite', (stores) => {
-      ['pages', 'texts', 'pdfs'].forEach((name) => {
+    await txDone(db, ['pages', 'texts', 'pdfs', 'covers'], 'readwrite', (stores) => {
+      ['pages', 'texts', 'pdfs', 'covers'].forEach((name) => {
         const cursor = stores[name].openCursor();
         cursor.onsuccess = () => {
           const row = cursor.result;
@@ -162,6 +212,6 @@
   }
 
   window.BookDB = {
-    open, listBooks, getBook, putBook, patchBook, putPage, putText, getPage, getTexts, putPdf, getPdf, deleteBook, vacuum
+    open, listBooks, getBook, putBook, patchBook, putPage, putText, getPage, getTexts, getCover, putPdf, getPdf, deleteBook, vacuum
   };
 })();

@@ -117,7 +117,7 @@
     clearTimeout(rt); rt = setTimeout(() => relayout(false), 160);
     if (zoomOpen()) zoomApply();
   };
-  addEventListener('resize', onResize);
+  addEventListener('resize', () => { onResize(); layoutThumbs(); });
   addEventListener('orientationchange', () => setTimeout(() => relayout(true), 250));
 
   function visiblePages() {
@@ -158,9 +158,9 @@
     if (!flip || turningBack) return;
     const from = flip.getCurrentPageIndex();
     const distance = Math.abs(i - from);
-    const portrait = flip.getOrientation() === 'portrait';
+    const portrait = onePage(flip);
     if (animate && portrait && i < from) {
-      if (from - i === 1) animatePortraitBack(flip);
+      if (from - i === 1) curlPortraitBack(flip);
       else flip.turnToPage(i);
       return;
     }
@@ -170,17 +170,20 @@
   function viaLib(fn) { if (!flip) return; const st = flip.getSettings(); st.disableFlipByClick = false; try { fn(); } finally { st.disableFlipByClick = true; } }
   const next = () => { if (turningBack) return; ensureLoaded(current + 1); viaLib(() => flip.flipNext()); };
   const prev = () => { if (turningBack) return; ensureLoaded(current - 1); viaLib(() => flip.flipPrev()); };
-  // Portrait mode keeps the previous page off to the left, and the library curls
-  // backward on that hidden page. Swing the previous page in over the visible one.
-  // A wide spread already curls the left page in view, so that path stays.
+  function onePage(book) {
+    return mode === 'portrait' || !!(book && book.getOrientation && book.getOrientation() === 'portrait');
+  }
+  // In one-page mode the library curls backward on a page that sits off screen,
+  // so nothing moves until the snap. Run the same forward curl, mirrored, with
+  // the previous page underneath. Wide spreads already curl the left page.
   function installBackwardTurn(book) {
     const orig = book.flipPrev.bind(book);
     book.flipPrev = (corner) => {
-      if (book.getOrientation() === 'portrait') animatePortraitBack(book);
+      if (onePage(book)) curlPortraitBack(book);
       else orig(corner);
     };
   }
-  function animatePortraitBack(book) {
+  function curlPortraitBack(book) {
     if (turningBack || !book) return;
     const from = book.getCurrentPageIndex();
     if (from <= 0) return;
@@ -188,48 +191,58 @@
       book.turnToPage(from - 1);
       return;
     }
-    const src = imgs[from - 1] && imgs[from - 1].getAttribute('src');
-    if (!src) {
+    const pages = book.getPageCollection();
+    const host = document.getElementById('book');
+    const prevImg = imgs[from - 1];
+    if (!prevImg || !prevImg.getAttribute('src')) {
       turningBack = true;
       ensureLoaded(from - 1).then(() => {
         turningBack = false;
         if (flip !== book || book.getCurrentPageIndex() !== from) return;
-        if (imgs[from - 1] && imgs[from - 1].getAttribute('src')) animatePortraitBack(book);
-        else book.turnToPage(from - 1);
+        curlPortraitBack(book);
       });
       return;
     }
-    const host = document.getElementById('book');
-    const rect = host.getBoundingClientRect();
-    if (rect.width < 20 || rect.height < 20) { book.turnToPage(from - 1); return; }
     const stamp = epoch;
     turningBack = true;
-    const wrap = document.createElement('div');
-    wrap.className = 'turn-back';
-    wrap.style.left = rect.left + 'px';
-    wrap.style.top = rect.top + 'px';
-    wrap.style.width = rect.width + 'px';
-    wrap.style.height = rect.height + 'px';
-    const im = document.createElement('img');
-    im.src = src;
-    im.alt = '';
-    const shade = document.createElement('div');
-    shade.className = 'turn-shade';
-    wrap.append(im, shade);
-    document.body.appendChild(wrap);
-    const ms = (book.getSettings && book.getSettings().flippingTime) || 650;
-    const anim = wrap.animate([
-      { transform: 'perspective(1800px) rotateY(86deg)' },
-      { transform: 'perspective(1800px) rotateY(0deg)' }
-    ], { duration: ms, easing: 'linear', fill: 'forwards' });
-    const done = () => {
-      wrap.remove();
-      const still = stamp === epoch && flip === book;
+    host.classList.add('curl-back');
+    const origBottom = pages.getBottomPage.bind(pages);
+    const origShowNext = pages.showNext.bind(pages);
+    const savedIndex = pages.currentPageIndex;
+    let restored = false;
+    const restore = () => {
+      if (restored) return;
+      restored = true;
+      pages.getBottomPage = origBottom;
+      pages.showNext = origShowNext;
+      if (pages.currentPageIndex === 0 && savedIndex !== 0) pages.currentPageIndex = savedIndex;
+      host.classList.remove('curl-back');
       turningBack = false;
-      if (still) book.turnToPage(from - 1);
     };
-    anim.onfinish = done;
-    anim.oncancel = done;
+    pages.getBottomPage = function(direction) {
+      if (direction === 0) {
+        const prev = this.pages[from - 1];
+        if (prev) return prev;
+      }
+      return origBottom(direction);
+    };
+    pages.showNext = function() {
+      pages.getBottomPage = origBottom;
+      pages.showNext = origShowNext;
+      host.classList.remove('curl-back');
+      turningBack = false;
+      restored = true;
+      if (stamp === epoch && flip === book) this.show(from - 1);
+    };
+    // A forward curl is refused on the last page. The check only reads the index.
+    if (savedIndex >= book.getPageCount() - 1) pages.currentPageIndex = Math.max(0, savedIndex - 1);
+    viaLib(() => book.flipNext('top'));
+    const ms = (book.getSettings && book.getSettings().flippingTime) || 700;
+    setTimeout(() => {
+      if (!turningBack || stamp !== epoch) return;
+      restore();
+      if (flip === book && book.getCurrentPageIndex() === from) book.turnToPage(from - 1);
+    }, ms + 400);
   }
 
   (function gestures() {
@@ -381,12 +394,27 @@
       frag.appendChild(t);
     }
     box.appendChild(frag);
+    layoutThumbs();
+  }
+  function layoutThumbs() {
+    const grid = $('#thumbs');
+    if (!grid) return;
+    const card = grid.querySelector('.thumb');
+    const width = card ? card.clientWidth : 0;
+    if (width < 16) return;
+    const ratio = RATIO > 0.2 ? RATIO : 1.3;
+    const height = Math.max(48, Math.round(width * ratio));
+    const px = height + 'px';
+    grid.style.setProperty('--thumb-h', px);
+    grid.style.gridAutoRows = px;
+    grid.querySelectorAll('.thumb').forEach((el) => { el.style.height = px; el.style.minHeight = px; });
   }
   function setSidebar(open) {
     $('#sidebar').classList.toggle('hidden', !open);
     document.body.classList.toggle('sb', open && !phone);
     if (!phone) { state.sidebar = open; saveState(); relayout(true); }
     const th = $('.thumb.current'); if (open && th) th.scrollIntoView({ block: 'center' });
+    if (open) requestAnimationFrame(layoutThumbs);
   }
 
   const SHEETS = { search: '#searchSheet', bookmarks: '#bookmarksSheet', menu: '#menuSheet', sidebar: '#sidebar' };

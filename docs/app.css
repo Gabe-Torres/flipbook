@@ -48,11 +48,8 @@ mark{background:rgba(212,175,55,.35);color:#fff;border-radius:2px;padding:0 1px}
 /* sidebar thumbs */
 .sidebar{position:fixed;top:var(--top);left:0;bottom:0;width:170px;background:rgba(18,21,27,.96);border-right:1px solid var(--line);overflow-y:auto;z-index:15;padding:10px;padding-left:calc(10px + var(--sal));overscroll-behavior:contain}
 .sidebar .sheethead{display:none}
-#thumbs{display:grid;grid-template-columns:1fr;gap:10px;align-items:start}
-.thumb{cursor:pointer;border:2px solid transparent;border-radius:6px;overflow:hidden;position:relative;background:#222;width:100%}
-/* Height comes from padding, not aspect-ratio on the image. iOS Safari collapses
-   aspect-ratio images in this grid to a few pixels. */
-.thumb::before{content:"";display:block;padding-top:calc(100% / var(--page-aspect, 0.772))}
+#thumbs{display:grid;grid-template-columns:1fr;gap:10px;align-items:start;grid-auto-rows:var(--thumb-h,160px)}
+.thumb{cursor:pointer;border:2px solid transparent;border-radius:6px;overflow:hidden;position:relative;background:#222;width:100%;height:var(--thumb-h,160px);min-height:var(--thumb-h,160px)}
 .thumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
 .thumb span{position:absolute;bottom:4px;right:6px;font-size:11px;background:rgba(0,0,0,.7);padding:1px 6px;border-radius:8px}
 .thumb.current{border-color:var(--accent)}
@@ -63,11 +60,10 @@ mark{background:rgba(212,175,55,.35);color:#fff;border-radius:2px;padding:0 1px}
 body.sb #stage{left:calc(170px + var(--sal))}
 #bookWrap{width:100%;height:100%;display:flex;align-items:center;justify-content:center}
 #book{box-shadow:0 30px 80px rgba(0,0,0,.6);min-width:0!important;min-height:0!important}
+#book.curl-back{transform:scaleX(-1)}
+#book.curl-back .page img{transform:scaleX(-1)}
 .page{background:#f4efe2;overflow:hidden}
 .page img{width:100%;height:100%;object-fit:contain;display:block;user-select:none;-webkit-user-drag:none;pointer-events:none}
-.turn-back{position:fixed;z-index:30;pointer-events:none;transform-origin:left center;overflow:hidden;background:#f4efe2;box-shadow:14px 0 28px rgba(0,0,0,.35)}
-.turn-back img{width:100%;height:100%;object-fit:cover;display:block}
-.turn-shade{position:absolute;inset:0;background:linear-gradient(90deg,rgba(0,0,0,.32),rgba(0,0,0,0) 34%);pointer-events:none}
 .page.--left{box-shadow:inset -18px 0 30px -18px rgba(0,0,0,.45)}
 .page.--right{box-shadow:inset 18px 0 30px -18px rgba(0,0,0,.45)}
 .page .ribbon{position:absolute;top:0;right:18px;width:22px;height:40px;background:var(--danger);clip-path:polygon(0 0,100% 0,100% 100%,50% 78%,0 100%);filter:drop-shadow(0 2px 2px #0008);z-index:3}
@@ -139,7 +135,7 @@ body.phone .nav{display:none}
 body.phone.sb #stage{left:var(--sal)}
 body.phone .sidebar{top:0;width:auto;right:0;bottom:0;z-index:45;padding:0;display:flex;flex-direction:column;background:var(--panel)}
 body.phone .sidebar .sheethead{display:flex;padding-top:calc(12px + var(--sat))}
-body.phone #thumbs{grid-template-columns:repeat(auto-fill,minmax(96px,1fr));padding:12px calc(12px + var(--sar)) calc(12px + var(--sab)) calc(12px + var(--sal));overflow:auto;flex:1;align-content:start}
+body.phone #thumbs{grid-template-columns:repeat(auto-fill,minmax(96px,1fr));padding:12px calc(12px + var(--sar)) calc(12px + var(--sab)) calc(12px + var(--sal));overflow:auto;flex:1;min-height:0;align-content:start}
 body.phone .sheet,body.phone .sheet.panel{inset:0;width:auto;top:0;border:none;padding:var(--sat) var(--sar) 0 var(--sal)}
 body.phone #searchSheet .search{max-width:none;flex:1;display:flex;flex-direction:column;min-height:0}
 body.phone #searchSheet .searchrow{padding:10px 12px;border-bottom:1px solid var(--line)}
