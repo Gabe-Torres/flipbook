@@ -582,11 +582,33 @@
       $$('#fairySeg button').forEach((b) => b.classList.toggle('on', b.dataset.cursor === Fairy.cursor));
       $('#fairySound').checked = Fairy.sound;
       $('.fairy-note').classList.toggle('hidden', Fairy.supported);
+      renderSoundNote();
     }
     const download = $('#btnDownloadPdf');
     const ocr = $('#btnOcr');
     if (download) download.classList.toggle('hidden', !(SESSION && SESSION.hasPdf));
     if (ocr) ocr.classList.toggle('hidden', !(SESSION && SESSION.showOcr));
+  }
+  function renderSoundNote() {
+    const note = $('#customSoundNote');
+    const reset = $('#btnSoundReset');
+    if (!note || !window.Fairy) return;
+    const apply = () => {
+      if (Fairy.customName) {
+        note.textContent = Fairy.customName + ' is saved on this device only. It is never uploaded.';
+        if (reset) reset.classList.remove('hidden');
+      } else {
+        note.textContent = 'Built-in sound. A custom file stays on this device and is never uploaded.';
+        if (reset) reset.classList.add('hidden');
+      }
+    };
+    if (Fairy.refreshCustom) Fairy.refreshCustom().then(apply).catch(apply);
+    else apply();
+  }
+  function soundFileOk(file) {
+    const name = (file && file.name) || '';
+    const type = (file && file.type) || '';
+    return /\.(mp3|wav|m4a|ogg)$/i.test(name) || /audio\/(mpeg|wav|wave|x-wav|mp4|aac|x-m4a|m4a|ogg)/i.test(type);
   }
   function setTitle(title) {
     const text = title || 'Flipbook';
@@ -627,6 +649,38 @@
     $$('#layoutSeg button').forEach((b) => b.onclick = () => { state.layout = b.dataset.layout; saveState(); renderMenu(); relayout(true); });
     $$('#fairySeg button').forEach((b) => b.onclick = () => { if (window.Fairy) { Fairy.setCursor(b.dataset.cursor); renderMenu(); } });
     $('#fairySound').onchange = (e) => { if (window.Fairy) Fairy.setSound(e.target.checked); };
+    const playSound = $('#btnPlaySound');
+    if (playSound) playSound.onclick = () => { if (window.Fairy) Fairy.preview(); };
+    const pickSound = $('#btnCustomSound');
+    const soundInput = $('#customSoundFile');
+    if (pickSound && soundInput) pickSound.onclick = () => soundInput.click();
+    if (soundInput) soundInput.onchange = async () => {
+      const file = soundInput.files && soundInput.files[0];
+      soundInput.value = '';
+      if (!file || !window.Fairy) return;
+      if (!soundFileOk(file)) { toast('Choose an mp3, wav, m4a, or ogg file.'); return; }
+      if (file.size > 1048576) { toast('That sound is over 1 MB.'); return; }
+      // Unlock in this gesture. The file is read afterward, then Play can use it.
+      Fairy.unlock();
+      try {
+        const bytes = await file.arrayBuffer();
+        const kept = bytes.slice(0);
+        await BookDB.putClickSound({ name: file.name, type: file.type, bytes });
+        Fairy.setCustom(kept, file.name, file.type);
+        toast('Saved on this device. It is never uploaded.');
+        renderSoundNote();
+        if (Fairy.sound) Fairy.preview();
+      } catch (err) {
+        toast((err && err.message) || 'Could not save that sound.');
+      }
+    };
+    const resetSound = $('#btnSoundReset');
+    if (resetSound) resetSound.onclick = async () => {
+      try { await BookDB.clearClickSound(); } catch (e) {}
+      if (window.Fairy) Fairy.clearCustom();
+      toast('Using the built-in sound.');
+      renderSoundNote();
+    };
     $('#btnResetData').onclick = () => {
       if (!confirm('Clear bookmarks and recent searches for this book?')) return;
       bookmarks = []; recent = []; saveBookmarks(); saveRecent();

@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   const DB_NAME = 'flipbook';
-  const DB_VERSION = 2;
+  const DB_VERSION = 3;
   let dbp = null;
   const queues = new Map();
 
@@ -30,6 +30,7 @@
         }
         if (!db.objectStoreNames.contains('pdfs')) db.createObjectStore('pdfs', { keyPath: 'bookId' });
         if (!db.objectStoreNames.contains('covers')) db.createObjectStore('covers', { keyPath: 'bookId' });
+        if (!db.objectStoreNames.contains('settings')) db.createObjectStore('settings', { keyPath: 'id' });
       };
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => {
@@ -211,7 +212,36 @@
     });
   }
 
+  async function getClickSound() {
+    const db = await open();
+    const row = await req(db.transaction('settings').objectStore('settings').get('click-sound'));
+    if (!row || !row.bytes || !row.bytes.byteLength) return null;
+    return { name: row.name || 'Custom sound', type: row.type || '', bytes: row.bytes };
+  }
+
+  async function putClickSound(info) {
+    const bytes = info && info.bytes;
+    if (!bytes || !bytes.byteLength) throw new Error('That sound file is empty.');
+    if (bytes.byteLength > 1048576) throw new Error('That sound is over 1 MB.');
+    const stored = bytes.slice(0);
+    const db = await open();
+    await txDone(db, ['settings'], 'readwrite', (stores) => {
+      stores.settings.put({
+        id: 'click-sound',
+        name: String(info.name || 'Custom sound').slice(0, 120),
+        type: String(info.type || ''),
+        bytes: stored
+      });
+    });
+  }
+
+  async function clearClickSound() {
+    const db = await open();
+    await txDone(db, ['settings'], 'readwrite', (stores) => { stores.settings.delete('click-sound'); });
+  }
+
   window.BookDB = {
-    open, listBooks, getBook, putBook, patchBook, putPage, putText, getPage, getTexts, getCover, putPdf, getPdf, deleteBook, vacuum
+    open, listBooks, getBook, putBook, patchBook, putPage, putText, getPage, getTexts, getCover, putPdf, getPdf, deleteBook, vacuum,
+    getClickSound, putClickSound, clearClickSound
   };
 })();

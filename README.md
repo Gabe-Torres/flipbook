@@ -18,7 +18,7 @@ On a computer:
 - `/` searches. Enter jumps to the next hit. Quotes around a phrase look for those exact words.
 - `B` bookmarks the page. You can give it a label. `M` opens the list. Bookmarked pages get a red ribbon.
 - `Z` or a double-click zooms. `T` opens the thumbnails. `F` is full screen. `G` jumps to a page number.
-- `N` changes the cursor: fairy, a small glow, or the normal cursor. It follows the mouse, stays off a touch screen, and calms down if you have Reduce Motion on. A click on it can play a short twinkle. That switch is in the menu.
+- `N` changes the cursor: fairy, a small glow, or the normal cursor. It follows the mouse, stays off a touch screen, and calms down if you have Reduce Motion on. In the menu, a click can play a short sound. You can swap in your own audio file. That file stays on this device.
 
 On a phone:
 

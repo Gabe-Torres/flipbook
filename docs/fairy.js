@@ -55,23 +55,232 @@
 
   document.addEventListener('click', (e) => {
     if (!running()) return;
-    if (Math.hypot(e.clientX - p.x, e.clientY - p.y) < 26) { flash = 1.4; burst(14); if (cfg.sound) twinkle(); }
+    const control = e.target.closest && e.target.closest('button, a, input, label, textarea, select');
+    if (control) return;
+    if (Math.hypot(e.clientX - p.x, e.clientY - p.y) < 26) { flash = 1.4; burst(14); if (cfg.sound) playClick(); }
   }, true);
 
   let ac = null;
-  function twinkle() {
+  let customBytes = null;
+  let customName = '';
+  let customType = '';
+  let customUrl = '';
+  let customAudio = null;
+  let customBuffer = null;
+  let customDecode = 0;
+  let lastSound = '';
+  let soundsStarted = 0;
+  let lastPlayError = '';
+
+  function ensureAudio() {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    if (!ac) ac = new AC();
+    if (ac.state === 'suspended') {
+      const pending = ac.resume();
+      if (pending && pending.catch) pending.catch(() => {});
+    }
+    return ac;
+  }
+
+  // iOS Safari ignores Web Audio until a buffer starts inside a user gesture.
+  function unlockAudio() {
+    const ctx = ensureAudio();
+    if (!ctx) return null;
     try {
-      ac = ac || new (window.AudioContext || window.webkitAudioContext)();
-      const now = ac.currentTime + 0.02, master = ac.createGain(); master.gain.value = 0.06; master.connect(ac.destination);
-      const notes = [[1760, 0], [2349, 0.07], [2093, 0.26], [2637, 0.33], [3136, 0.40]];
-      for (const [f, dt] of notes) {
-        const o = ac.createOscillator(), g = ac.createGain();
-        o.type = 'sine'; o.frequency.setValueAtTime(f, now + dt); o.frequency.exponentialRampToValueAtTime(f * 1.02, now + dt + 0.12);
-        g.gain.setValueAtTime(0, now + dt); g.gain.linearRampToValueAtTime(1, now + dt + 0.008); g.gain.exponentialRampToValueAtTime(0.001, now + dt + 0.22);
-        o.connect(g); g.connect(master); o.start(now + dt); o.stop(now + dt + 0.25);
+      const buffer = ctx.createBuffer(1, 1, 22050);
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+      src.connect(ctx.destination);
+      src.start(0);
+    } catch (e) {}
+    return ctx;
+  }
+  addEventListener('pointerdown', () => { unlockAudio(); }, { capture: true, passive: true });
+  addEventListener('touchend', () => { unlockAudio(); }, { capture: true, passive: true });
+
+  function tone(when, type, f0, f1, dur, peak) {
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(Math.max(40, f0), when);
+    if (f1 && f1 !== f0) osc.frequency.exponentialRampToValueAtTime(Math.max(40, f1), when + dur * 0.75);
+    gain.gain.setValueAtTime(0.0001, when);
+    gain.gain.exponentialRampToValueAtTime(peak, when + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+    osc.connect(gain);
+    gain.connect(ac.destination);
+    osc.start(when);
+    osc.stop(when + dur + 0.02);
+    soundsStarted++;
+  }
+
+  // Original two-burst chirp. Not taken from any game or recording.
+  // First burst is a short "hey", then a higher rising "listen" with a small bell.
+  function heyListen() {
+    const now = ac.currentTime + 0.03;
+    tone(now, 'triangle', 640, 920, 0.11, 0.16);
+    tone(now + 0.08, 'sine', 1568, 1660, 0.16, 0.07);
+    tone(now + 0.36, 'triangle', 1046, 1480, 0.12, 0.16);
+    tone(now + 0.48, 'triangle', 1480, 2093, 0.14, 0.14);
+    tone(now + 0.58, 'sine', 2637, 2794, 0.18, 0.05);
+    tone(now + 0.66, 'sine', 3136, 3322, 0.2, 0.035);
+  }
+
+  function twinkle() {
+    const now = ac.currentTime + 0.02;
+    const notes = [[1760, 0], [2349, 0.07], [2093, 0.26], [2637, 0.33], [3136, 0.40]];
+    for (const [freq, delay] of notes) tone(now + delay, 'sine', freq, freq * 1.02, 0.2, 0.07);
+  }
+
+  function forgetCustomUrl() {
+    if (customUrl) URL.revokeObjectURL(customUrl);
+    customUrl = '';
+    customBuffer = null;
+    customDecode = 0;
+    if (customAudio) {
+      customAudio.pause();
+      customAudio.removeAttribute('src');
+    }
+  }
+
+  function textAt(view, offset, length) {
+    let out = '';
+    for (let i = 0; i < length; i++) out += String.fromCharCode(view.getUint8(offset + i));
+    return out;
+  }
+
+  // PCM wav files can play even when the browser has not started its audio device yet.
+  function bufferFromWav(ctx, bytes) {
+    if (!bytes || bytes.byteLength < 44) return null;
+    const view = new DataView(bytes);
+    if (textAt(view, 0, 4) !== 'RIFF' || textAt(view, 8, 4) !== 'WAVE') return null;
+    let offset = 12;
+    let format = 0, channels = 0, rate = 0, bits = 0, dataOffset = 0, dataSize = 0;
+    while (offset + 8 <= bytes.byteLength) {
+      const id = textAt(view, offset, 4);
+      const size = view.getUint32(offset + 4, true);
+      const start = offset + 8;
+      if (id === 'fmt ') {
+        format = view.getUint16(start, true);
+        channels = view.getUint16(start + 2, true);
+        rate = view.getUint32(start + 4, true);
+        bits = view.getUint16(start + 14, true);
+      } else if (id === 'data') {
+        dataOffset = start;
+        dataSize = size;
+        break;
+      }
+      offset = start + size + (size & 1);
+    }
+    if (format !== 1 || !rate || !dataSize || channels < 1 || channels > 2 || (bits !== 8 && bits !== 16)) return null;
+    const width = bits / 8;
+    const frames = Math.floor(dataSize / (channels * width));
+    if (!frames || dataOffset + frames * channels * width > bytes.byteLength) return null;
+    const buffer = ctx.createBuffer(channels, frames, rate);
+    for (let c = 0; c < channels; c++) {
+      const out = buffer.getChannelData(c);
+      for (let i = 0; i < frames; i++) {
+        const pos = dataOffset + (i * channels + c) * width;
+        out[i] = bits === 8 ? (view.getUint8(pos) - 128) / 128 : view.getInt16(pos, true) / 32768;
+      }
+    }
+    return buffer;
+  }
+
+  function playCustomBuffer() {
+    if (!ac || !customBuffer) return false;
+    const src = ac.createBufferSource();
+    const gain = ac.createGain();
+    gain.gain.value = 0.9;
+    src.buffer = customBuffer;
+    src.connect(gain);
+    gain.connect(ac.destination);
+    src.start(0);
+    soundsStarted++;
+    return true;
+  }
+
+  function playCustomFile() {
+    if (!customBytes || !customBytes.byteLength) return false;
+    try {
+      if (!customUrl) {
+        const blob = new Blob([customBytes], { type: customType || 'audio/mpeg' });
+        customUrl = URL.createObjectURL(blob);
+      }
+      if (!customAudio) {
+        customAudio = new Audio();
+        customAudio.setAttribute('playsinline', '');
+        customAudio.setAttribute('webkit-playsinline', '');
+        customAudio.preload = 'auto';
+        customAudio.style.display = 'none';
+        document.body.appendChild(customAudio);
+      }
+      if (customAudio.src !== customUrl) customAudio.src = customUrl;
+      try { if (customAudio.currentTime) customAudio.currentTime = 0; } catch (e) {}
+      const pending = customAudio.play();
+      if (pending && pending.then) {
+        pending.then(() => { soundsStarted++; }).catch((err) => {
+          lastPlayError = err && err.message ? err.message : String(err);
+        });
+      } else soundsStarted++;
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function primeCustomBuffer() {
+    if (!customBytes || !customBytes.byteLength || customBuffer) return;
+    const ctx = ensureAudio();
+    if (!ctx) return;
+    try {
+      const wav = bufferFromWav(ctx, customBytes);
+      if (wav) { customBuffer = wav; return; }
+    } catch (e) {}
+    const token = ++customDecode;
+    const copy = customBytes.slice(0);
+    Promise.resolve(ctx.decodeAudioData(copy)).then((buffer) => {
+      if (token === customDecode && buffer) customBuffer = buffer;
+    }).catch((err) => { lastPlayError = err && err.message ? err.message : String(err); });
+  }
+
+  function playClick() {
+    try {
+      unlockAudio();
+      if (customBytes && customBytes.byteLength) {
+        if (!customBuffer) primeCustomBuffer();
+        if (playCustomBuffer() || playCustomFile()) {
+          lastSound = 'custom';
+          return 'custom';
+        }
+      }
+      const ctx = ensureAudio();
+      if (!ctx) return false;
+      if (cfg.cursor === 'glow') { twinkle(); lastSound = 'glow'; return 'glow'; }
+      heyListen();
+      lastSound = 'fairy';
+      return 'fairy';
+    } catch (e) {
+      return false;
+    }
+  }
+
+  async function refreshCustom() {
+    if (customBytes && customBytes.byteLength) return customName;
+    if (!window.BookDB || !BookDB.getClickSound) return customName;
+    try {
+      const row = await BookDB.getClickSound();
+      if (row && row.bytes && row.bytes.byteLength) {
+        customBytes = row.bytes.slice(0);
+        customType = row.type || '';
+        customName = row.name || 'Custom sound';
+        primeCustomBuffer();
       }
     } catch (e) {}
+    return customName;
   }
+  refreshCustom();
 
   function burst(n) {
     for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, s = 30 + Math.random() * 80;
@@ -171,6 +380,11 @@
     get cursor() { return cfg.cursor; },
     get on() { return cfg.cursor !== 'off'; },
     get sound() { return cfg.sound; },
+    get customName() { return customName; },
+    get lastSound() { return lastSound; },
+    get soundsStarted() { return soundsStarted; },
+    get lastPlayError() { return lastPlayError; },
+    get audioState() { return ac ? ac.state : 'closed'; },
     get supported() { return supported(); },
     get running() { return running(); },
     get label() { return labels[cfg.cursor] || 'Cursor'; },
@@ -187,7 +401,23 @@
       return this.setCursor(CURSORS[(i + 1) % CURSORS.length]);
     },
     toggle() { return this.cycle() !== 'off'; },
-    setSound(on) { cfg.sound = !!on; save(); if (on && cfg.cursor !== 'off') twinkle(); document.dispatchEvent(new CustomEvent('fairychange')); }
+    setSound(on) { cfg.sound = !!on; save(); if (on) playClick(); document.dispatchEvent(new CustomEvent('fairychange')); },
+    preview() { return playClick(); },
+    unlock() { unlockAudio(); },
+    refreshCustom,
+    setCustom(bytes, name, type) {
+      const nextName = name || '';
+      const keepUrl = !!(customUrl && customName === nextName);
+      if (!keepUrl) forgetCustomUrl();
+      customBytes = bytes && bytes.byteLength ? bytes.slice(0) : null;
+      customType = type || '';
+      customName = nextName;
+      customBuffer = null;
+      customDecode = 0;
+      lastSound = '';
+      primeCustomBuffer();
+    },
+    clearCustom() { forgetCustomUrl(); customBytes = null; customType = ''; customName = ''; lastSound = ''; }
   };
   sync();
 })();

@@ -131,8 +131,15 @@
         <button type="button" data-cursor="glow">Glow</button>
         <button type="button" data-cursor="off">Off</button>
       </div>
-      <div class="row" style="margin-top:8px"><label class="chk"><input type="checkbox" id="fairySound"> Twinkle sound when you click the companion</label></div>
-      <p class="muted small fairy-note hidden">A custom cursor follows a mouse or trackpad, so it stays off on touch screens.</p>
+      <div class="row" style="margin-top:8px"><label class="chk"><input type="checkbox" id="fairySound"> Sound effect when clicking</label></div>
+      <div class="row">
+        <button type="button" id="btnPlaySound">Play</button>
+        <button type="button" id="btnCustomSound">Custom click sound</button>
+        <button type="button" id="btnSoundReset" class="hidden">Reset to default</button>
+        <input id="customSoundFile" type="file" accept="audio/mpeg,audio/wav,audio/mp4,audio/ogg,audio/x-m4a,.mp3,.wav,.m4a,.ogg" hidden>
+      </div>
+      <p class="muted small" id="customSoundNote">Built-in sound. A custom file stays on this device and is never uploaded.</p>
+      <p class="muted small fairy-note hidden">A custom cursor follows a mouse or trackpad, so it stays off on touch screens. The sound still plays from Play.</p>
     </div>
     <h4>Go to page</h4>
     <div class="row"><input id="menuPage" type="number" inputmode="numeric" min="1" placeholder="Page #"><button id="menuGo" type="button">Go</button></div>
