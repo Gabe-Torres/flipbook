@@ -578,6 +578,13 @@
     if (version) version.textContent = `Version ${V.version}`;
     const menuPage = $('#menuPage');
     if (menuPage) menuPage.max = N;
+    if (window.Theme) {
+      $$('#themeSeg button').forEach((b) => {
+        const on = b.dataset.theme === Theme.choice;
+        b.classList.toggle('on', on);
+        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+    }
     if (window.Fairy) {
       $$('#fairySeg button').forEach((b) => b.classList.toggle('on', b.dataset.cursor === Fairy.cursor));
       $('#fairySound').checked = Fairy.sound;
@@ -647,6 +654,7 @@
     $('#menuGo').onclick = () => { const v = +$('#menuPage').value; if (v) { go(v - 1, false); closeSheet('menu'); } };
     $('#menuPage').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#menuGo').click(); });
     $$('#layoutSeg button').forEach((b) => b.onclick = () => { state.layout = b.dataset.layout; saveState(); renderMenu(); relayout(true); });
+    $$('#themeSeg button').forEach((b) => b.onclick = () => { if (window.Theme) { Theme.set(b.dataset.theme); renderMenu(); } });
     $$('#fairySeg button').forEach((b) => b.onclick = () => { if (window.Fairy) { Fairy.setCursor(b.dataset.cursor); renderMenu(); } });
     $('#fairySound').onchange = (e) => { if (window.Fairy) Fairy.setSound(e.target.checked); };
     const playSound = $('#btnPlaySound');

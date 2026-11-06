@@ -19,6 +19,7 @@ On a computer:
 - `B` bookmarks the page. You can give it a label. `M` opens the list. Bookmarked pages get a red ribbon.
 - `Z` or a double-click zooms. `T` opens the thumbnails. `F` is full screen. `G` jumps to a page number.
 - `N` changes the cursor: fairy, a small glow, or the normal cursor. It follows the mouse, stays off a touch screen, and calms down if you have Reduce Motion on. In the menu, a click can play a short sound. You can swap in your own audio file. That file stays on this device.
+- The menu also sets the theme: Light, Dark, or System. System follows the device. The choice stays in this browser and covers the library and every saved book. The pages themselves are not recolored.
 
 On a phone:
 

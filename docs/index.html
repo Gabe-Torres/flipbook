@@ -6,7 +6,23 @@
 <title>Flipbook</title>
 <meta name="description" content="Open a PDF like a book. Pages, search, and bookmarks stay on this device.">
 <meta name="theme-color" content="#0f1115">
-<meta name="color-scheme" content="dark">
+<meta name="color-scheme" content="light dark">
+<script>
+(function () {
+  var key = 'flipbook.theme', choice = 'system';
+  try { choice = localStorage.getItem(key) || 'system'; } catch (e) {}
+  if (choice !== 'light' && choice !== 'dark') choice = 'system';
+  var light = false;
+  try { light = matchMedia('(prefers-color-scheme: light)').matches; } catch (e) {}
+  var theme = choice === 'system' ? (light ? 'light' : 'dark') : choice;
+  var root = document.documentElement;
+  root.setAttribute('data-theme', theme);
+  root.setAttribute('data-theme-choice', choice);
+  root.style.colorScheme = theme;
+  var meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', theme === 'light' ? '#efeae1' : '#0f1115');
+})();
+</script>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -124,6 +140,12 @@
     <div class="seg" id="layoutSeg">
       <button type="button" data-layout="auto">Auto</button><button type="button" data-layout="single">One page</button><button type="button" data-layout="spread">Two pages</button>
     </div>
+    <h4>Theme</h4>
+    <div class="seg" id="themeSeg" role="group" aria-label="Theme">
+      <button type="button" data-theme="light" aria-pressed="false">Light</button>
+      <button type="button" data-theme="dark" aria-pressed="false">Dark</button>
+      <button type="button" data-theme="system" aria-pressed="true">System</button>
+    </div>
     <div class="fairy-opts">
       <h4>Cursor <span class="muted">(N)</span></h4>
       <div class="seg" id="fairySeg">
@@ -208,6 +230,7 @@
 </div>
 
 <div id="toast" class="toast hidden"><span class="msg"></span><button class="act hidden" type="button"></button></div>
+<script src="theme.js"></script>
 <script src="app-version.js"></script>
 <script src="vendor/page-flip.browser.js"></script>
 <script src="vendor/pdfjs/pdf.min.js"></script>
