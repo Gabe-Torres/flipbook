@@ -8,6 +8,8 @@ Open a PDF like a book. Turn the pages.
 
 Pick a PDF from your device, or drop one on the page. Flipbook draws the pages in the browser and keeps them there. Search, bookmarks, and the last page you were on stay with that book. Nothing is uploaded.
 
+A sheet that is really two pages side by side, one wide rectangle instead of a normal Letter or A4 page, is cut into a left page and a right page. The checkbox under Choose a PDF turns that off. The original file is left as it is.
+
 A scanned PDF with no text layer can run English text recognition, also on this device. The first time, it loads the recognition files that ship with the app, so it still works after you go offline.
 
 ## How to read

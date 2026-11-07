@@ -186,6 +186,7 @@ button.primary{background:var(--accent-fill);color:var(--accent-ink);font-weight
 .dropzone img{border-radius:16px}
 .dropzone h2{margin:10px 0 6px}
 .dropzone p{margin:0 auto 16px;max-width:46ch;color:var(--muted)}
+.split-opt{justify-content:center;margin:-4px auto 14px;max-width:46ch;text-align:left}
 .dropzone.over{border-color:var(--accent);background:var(--drop-over)}
 .libsection{margin-top:26px}
 .libsection-h{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:10px}

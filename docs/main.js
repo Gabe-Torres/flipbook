@@ -334,7 +334,7 @@
     showProgress({ phase: 'read', current: 0, total: 1, detail: file.name || 'PDF' });
     let result = null;
     try {
-      result = await PdfImport.importFile(file, { signal: ac.signal, onProgress: showProgress });
+      result = await PdfImport.importFile(file, { signal: ac.signal, onProgress: showProgress, split: splitWideOn() });
     } catch (err) {
       console.error(err);
       toast((err && err.message) || 'Could not open that PDF');
@@ -370,6 +370,10 @@
     }
     await rememberPersist();
     await openBook(result.id);
+    if (result.splitSheets) {
+      const count = result.splitSheets;
+      toast(count === 1 ? 'Split 1 wide sheet into two pages.' : `Split ${count} wide sheets into two pages each.`);
+    }
   }
 
   async function importFiles(fileList) {
@@ -453,7 +457,19 @@
     return !!(event.dataTransfer && event.dataTransfer.types && [...event.dataTransfer.types].includes('Files'));
   }
 
+  function splitWideOn() {
+    const box = $('#splitWide');
+    return !box || box.checked;
+  }
+
   function wireShell() {
+    const splitBox = $('#splitWide');
+    if (splitBox) {
+      try { if (localStorage.getItem('flipbook.splitWide') === '0') splitBox.checked = false; } catch (e) {}
+      splitBox.addEventListener('change', () => {
+        try { localStorage.setItem('flipbook.splitWide', splitBox.checked ? '1' : '0'); } catch (e) {}
+      });
+    }
     $('#pickFile').addEventListener('click', () => $('#fileInput').click());
     $('#fileInput').addEventListener('change', () => {
       const files = [...$('#fileInput').files];
