@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   const DB_NAME = 'flipbook';
-  const DB_VERSION = 3;
+  const DB_VERSION = 4;
   let dbp = null;
   const queues = new Map();
 
@@ -31,6 +31,15 @@
         if (!db.objectStoreNames.contains('pdfs')) db.createObjectStore('pdfs', { keyPath: 'bookId' });
         if (!db.objectStoreNames.contains('covers')) db.createObjectStore('covers', { keyPath: 'bookId' });
         if (!db.objectStoreNames.contains('settings')) db.createObjectStore('settings', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('outlines')) db.createObjectStore('outlines', { keyPath: 'bookId' });
+        if (!db.objectStoreNames.contains('chapters')) {
+          const chapters = db.createObjectStore('chapters', { keyPath: 'id' });
+          chapters.createIndex('byBook', 'bookId', { unique: false });
+        }
+        if (!db.objectStoreNames.contains('annotations')) {
+          const notes = db.createObjectStore('annotations', { keyPath: 'id' });
+          notes.createIndex('byBook', 'bookId', { unique: false });
+        }
       };
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => {
@@ -175,10 +184,11 @@
 
   async function deleteBook(id) {
     const db = await open();
-    await txDone(db, ['books', 'pages', 'texts', 'pdfs', 'covers'], 'readwrite', (stores) => {
+    await txDone(db, ['books', 'pages', 'texts', 'pdfs', 'covers', 'outlines', 'chapters', 'annotations'], 'readwrite', (stores) => {
       stores.books.delete(id);
       stores.pdfs.delete(id);
       stores.covers.delete(id);
+      stores.outlines.delete(id);
       const wipe = (index) => {
         const cursor = index.openCursor(IDBKeyRange.only(id));
         cursor.onsuccess = () => {
@@ -190,6 +200,8 @@
       };
       wipe(stores.pages.index('byBook'));
       wipe(stores.texts.index('byBook'));
+      wipe(stores.chapters.index('byBook'));
+      wipe(stores.annotations.index('byBook'));
     });
     queues.delete(id);
   }
@@ -198,8 +210,8 @@
     const books = await listBooks();
     const ids = new Set(books.map((book) => book.id));
     const db = await open();
-    await txDone(db, ['pages', 'texts', 'pdfs', 'covers'], 'readwrite', (stores) => {
-      ['pages', 'texts', 'pdfs', 'covers'].forEach((name) => {
+    await txDone(db, ['pages', 'texts', 'pdfs', 'covers', 'outlines', 'chapters', 'annotations'], 'readwrite', (stores) => {
+      ['pages', 'texts', 'pdfs', 'covers', 'outlines', 'chapters', 'annotations'].forEach((name) => {
         const cursor = stores[name].openCursor();
         cursor.onsuccess = () => {
           const row = cursor.result;
@@ -240,8 +252,109 @@
     await txDone(db, ['settings'], 'readwrite', (stores) => { stores.settings.delete('click-sound'); });
   }
 
+  function newId(prefix) {
+    const rand = crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(16).slice(2));
+    return prefix + rand;
+  }
+
+  function clamp01(n) {
+    const x = Number(n);
+    if (!Number.isFinite(x)) return 0;
+    return Math.min(1, Math.max(0, x));
+  }
+
+  async function getOutline(bookId) {
+    const db = await open();
+    const row = await req(db.transaction('outlines').objectStore('outlines').get(bookId));
+    if (!row) return null;
+    return Array.isArray(row.items) ? row.items : [];
+  }
+
+  async function putOutline(bookId, items) {
+    const db = await open();
+    await txDone(db, ['outlines'], 'readwrite', (stores) => {
+      stores.outlines.put({ bookId, items: Array.isArray(items) ? items : [] });
+    });
+  }
+
+  async function listByBook(storeName, bookId) {
+    const db = await open();
+    const rows = await req(db.transaction(storeName).objectStore(storeName).index('byBook').getAll(bookId));
+    return rows || [];
+  }
+
+  async function listChapters(bookId) {
+    const rows = await listByBook('chapters', bookId);
+    rows.sort((a, b) => a.page - b.page || (a.created || 0) - (b.created || 0));
+    return rows.map((row) => ({
+      id: row.id, bookId: row.bookId, title: row.title, page: row.page, created: row.created || 0, updated: row.updated || 0
+    }));
+  }
+
+  async function putChapter(info) {
+    const title = String(info && info.title || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+    const page = info && info.page | 0;
+    if (!info || !info.bookId) throw new Error('Missing book.');
+    if (!title) throw new Error('Give the chapter a title.');
+    if (page < 0) throw new Error('That page number is not in this book.');
+    const now = Date.now();
+    const record = {
+      id: info.id || newId('c'),
+      bookId: info.bookId,
+      title,
+      page,
+      created: info.created || now,
+      updated: now
+    };
+    const db = await open();
+    await txDone(db, ['chapters'], 'readwrite', (stores) => { stores.chapters.put(record); });
+    return record;
+  }
+
+  async function deleteChapter(id) {
+    const db = await open();
+    await txDone(db, ['chapters'], 'readwrite', (stores) => { stores.chapters.delete(id); });
+  }
+
+  async function listAnnotations(bookId) {
+    const rows = await listByBook('annotations', bookId);
+    rows.sort((a, b) => a.page - b.page || a.y - b.y || (a.created || 0) - (b.created || 0));
+    return rows;
+  }
+
+  async function putAnnotation(info) {
+    if (!info || !info.bookId) throw new Error('Missing book.');
+    const kind = info.kind === 'note' ? 'note' : 'area';
+    const page = info.page | 0;
+    if (page < 0) throw new Error('That page is not in this book.');
+    const now = Date.now();
+    const record = {
+      id: info.id || newId('a'),
+      bookId: info.bookId,
+      page,
+      kind,
+      x: clamp01(info.x),
+      y: clamp01(info.y),
+      w: kind === 'area' ? clamp01(info.w) : 0,
+      h: kind === 'area' ? clamp01(info.h) : 0,
+      text: String(info.text || '').slice(0, 2000),
+      created: info.created || now,
+      updated: now
+    };
+    if (kind === 'area' && (record.w < 0.01 || record.h < 0.01)) throw new Error('Drag a larger highlight.');
+    const db = await open();
+    await txDone(db, ['annotations'], 'readwrite', (stores) => { stores.annotations.put(record); });
+    return record;
+  }
+
+  async function deleteAnnotation(id) {
+    const db = await open();
+    await txDone(db, ['annotations'], 'readwrite', (stores) => { stores.annotations.delete(id); });
+  }
+
   window.BookDB = {
     open, listBooks, getBook, putBook, patchBook, putPage, putText, getPage, getTexts, getCover, putPdf, getPdf, deleteBook, vacuum,
-    getClickSound, putClickSound, clearClickSound
+    getClickSound, putClickSound, clearClickSound,
+    getOutline, putOutline, listChapters, putChapter, deleteChapter, listAnnotations, putAnnotation, deleteAnnotation
   };
 })();

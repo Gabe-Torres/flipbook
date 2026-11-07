@@ -123,7 +123,8 @@ button.danger{color:var(--danger)}
 #zLabel,#zPct{color:var(--muted);min-width:64px;text-align:center}
 .zscroll{flex:1;overflow:auto;cursor:grab;text-align:center;touch-action:pan-x pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
 .zscroll.drag{cursor:grabbing}
-.zscroll img{display:inline-block;margin:20px auto;margin-bottom:calc(20px + var(--sab));box-shadow:0 20px 60px var(--shadow);background:#fff;user-select:none;-webkit-user-drag:none;max-width:none;filter:none}
+#zFrame{position:relative;display:inline-block;margin:20px auto;margin-bottom:calc(20px + var(--sab));max-width:none}
+#zFrame img{display:block;margin:0;box-shadow:0 20px 60px var(--shadow);background:#fff;user-select:none;-webkit-user-drag:none;max-width:none;filter:none}
 .toast{position:fixed;bottom:calc(24px + var(--bottom));left:50%;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:8px 8px 8px 16px;border-radius:22px;z-index:70;display:flex;gap:10px;align-items:center;box-shadow:0 10px 30px var(--shadow);max-width:calc(100vw - 24px)}
 .toast .act{background:var(--accent-fill);color:var(--accent-ink);border:none;border-radius:16px;height:30px;padding:0 12px;font-weight:700;white-space:nowrap}
 .toast:not(:has(.act:not(.hidden))){padding-right:16px}
@@ -135,9 +136,9 @@ body.phone .topbar{display:none}
 body.phone .phonebar{display:flex;position:fixed;top:0;left:0;right:0;height:var(--top);padding:var(--sat) calc(12px + var(--sar)) 0 calc(12px + var(--sal));align-items:center;gap:8px;background:var(--bar);border-bottom:1px solid var(--line);z-index:20}
 .ptitle{font-weight:600;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ptitle span{color:var(--accent);font-weight:500}
 body.phone .bottombar{display:flex;position:fixed;left:0;right:0;bottom:0;height:var(--bottom);padding:0 var(--sar) var(--sab) var(--sal);background:var(--bar-solid);border-top:1px solid var(--line);z-index:25}
-.bottombar button{flex:1;min-width:44px;border:none;background:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:4px 0;color:var(--text)}
+.bottombar button{flex:1 1 0;min-width:0;border:none;background:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:4px 0;color:var(--text)}
 .bottombar button span{font-size:20px;line-height:24px}
-.bottombar button small{font-size:10px;color:var(--muted)}
+.bottombar button small{font-size:9px;color:var(--muted);white-space:nowrap;max-width:100%;overflow:hidden}
 .bottombar button:active{background:var(--panel2)}
 .bottombar .bb-num{font-weight:700;color:var(--accent);font-size:17px}
 .bottombar .bm-toggle.on span{color:var(--danger)}
@@ -193,6 +194,37 @@ button.primary{background:var(--accent-fill);color:var(--accent-ink);font-weight
 .bookcard{display:flex;gap:14px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px;cursor:pointer}
 .bookcard:hover{border-color:var(--card-hover)}
 .bookcard img.cover{width:56px;height:74px;object-fit:cover;border-radius:4px;background:#d9d0bc;flex:none;filter:none}
+.page{position:relative}
+.marks{position:absolute;inset:0;z-index:2;pointer-events:none}
+body.annotating .marks{pointer-events:auto;touch-action:none}
+.mark-area,.mark-draft{position:absolute;box-sizing:border-box;border-radius:2px}
+.mark-area{background:rgba(212,175,55,.38);border:2px solid #8a6410;padding:0;min-width:0;min-height:0}
+.mark-draft{border:2px dashed #8a6410;background:rgba(212,175,55,.28);pointer-events:none}
+.mark-note{position:absolute;width:36px;height:36px;margin:-30px 0 0 -8px;border-radius:10px 10px 10px 3px;border:2px solid #1a1405;background:var(--accent-fill);color:var(--accent-ink);font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.28);padding:0}
+body:not(.annotating) .mark-area,body:not(.annotating) .mark-note{pointer-events:none}
+.sheetbody .mark-area,.sheetbody .mark-note{height:auto}
+#book.curl-back .marks{transform:scaleX(-1)}
+.annobanner{position:fixed;left:max(12px,var(--sal));right:max(12px,var(--sar));bottom:calc(var(--bottom) + 12px);z-index:32;display:flex;gap:10px;align-items:center;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:14px;padding:8px 8px 8px 14px;box-shadow:0 10px 30px var(--shadow)}
+.annobanner span{flex:1;min-width:0}
+.annobanner button{height:40px;border-radius:10px;border:1px solid var(--accent-fill);background:var(--accent-fill);color:var(--accent-ink);font-weight:700;padding:0 14px}
+.toc,.toc ul{list-style:none;margin:0;padding:0}
+.toc ul{margin:0 0 6px 10px;padding-left:10px;border-left:2px solid var(--line)}
+.toc li{margin:0}
+.sheetbody .toc-item,.sheetbody .jump{display:flex;width:100%;align-items:center;justify-content:space-between;gap:10px;min-height:44px;height:auto;text-align:left;background:transparent;border:none;border-radius:8px;padding:8px 10px;color:var(--text)}
+.sheetbody .toc-item:hover,.sheetbody .jump:hover{background:var(--panel2)}
+.toc-item small,.jump small{color:var(--muted);flex:none}
+.toc-label{min-width:0}
+.toc-heading{padding:8px 10px;color:var(--muted);font-weight:600}
+.chapter-form{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+.chapter-form input[type="text"]{flex:1 1 140px;min-width:0;height:40px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);color:var(--text);padding:0 12px}
+.chapter-form input[type="number"]{width:88px;height:40px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);color:var(--text);padding:0 10px}
+.chapter-row,.note-row{display:flex;gap:8px;align-items:center;padding:4px 0}
+.chapter-row .jump,.note-row .jump{flex:1}
+.sheetbody .mini{height:36px;min-width:36px;padding:0 10px}
+.note-row .kind{color:var(--accent);font-size:12px;font-weight:700}
+#noteText{width:100%;min-height:120px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);color:var(--text);padding:10px 12px;font-size:16px;line-height:1.4;resize:vertical}
+#markSeg{margin-bottom:8px}
+#markSeg button.on{background:var(--accent-fill);color:var(--accent-ink)}
 .bookcard .meta{flex:1;min-width:0}
 .bookcard h3{margin:0;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bookcard .sub{margin:3px 0 0;color:var(--muted);font-size:12px}

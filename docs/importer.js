@@ -38,6 +38,59 @@
     return rich / texts.length < 0.35;
   }
 
+  async function destPage(pdf, dest) {
+    try {
+      let explicit = dest;
+      if (!explicit) return null;
+      if (typeof explicit === 'string') explicit = await pdf.getDestination(explicit);
+      if (typeof explicit === 'string') explicit = await pdf.getDestination(explicit);
+      if (!Array.isArray(explicit) || explicit[0] == null) return null;
+      const index = await pdf.getPageIndex(explicit[0]);
+      if (!Number.isInteger(index) || index < 0 || index >= pdf.numPages) return null;
+      return index;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  async function outlineTree(pdf, nodes, depth) {
+    if (!nodes || !nodes.length || depth > 12) return [];
+    const out = [];
+    for (const node of nodes) {
+      const title = String(node && node.title || '').replace(/\s+/g, ' ').trim().slice(0, 180);
+      const page = await destPage(pdf, node && node.dest);
+      const items = await outlineTree(pdf, node && node.items, depth + 1);
+      if (!title && !items.length) continue;
+      if (page == null && !items.length) continue;
+      out.push({ title: title || 'Untitled', page, items });
+    }
+    return out;
+  }
+
+  async function readOutline(pdf) {
+    try {
+      const raw = await pdf.getOutline();
+      return await outlineTree(pdf, raw, 0);
+    } catch (e) {
+      return [];
+    }
+  }
+
+  async function outlineFromBlob(blob) {
+    if (!blob) return [];
+    configurePdf();
+    const data = await blob.arrayBuffer();
+    const task = pdfjsLib.getDocument({
+      data,
+      cMapUrl: asset('vendor/pdfjs/cmaps/'),
+      cMapPacked: true,
+      standardFontDataUrl: asset('vendor/pdfjs/standard_fonts/')
+    });
+    const pdf = await task.promise;
+    try { return await readOutline(pdf); }
+    finally { try { await pdf.destroy(); } catch (e) {} }
+  }
+
   function titleFrom(file, meta) {
     let title = meta && meta.info && meta.info.Title;
     if (title != null && typeof title !== 'string') title = String(title);
@@ -86,6 +139,9 @@
       let meta = null;
       try { meta = await pdf.getMetadata(); } catch (e) {}
       const title = titleFrom(file, meta);
+      let outline = [];
+      try { outline = await readOutline(pdf); } catch (e) { outline = []; }
+      try { await BookDB.putOutline(id, outline); } catch (e) {}
       let pageWidth = 612;
       let pageHeight = 792;
       let cover = null;
@@ -223,5 +279,5 @@
     }
   }
 
-  window.PdfImport = { importFile, ocrBook, textIsSparse, asset };
+  window.PdfImport = { importFile, ocrBook, textIsSparse, asset, outlineFromBlob, readOutline };
 })();

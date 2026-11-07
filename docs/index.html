@@ -82,6 +82,8 @@
     <button id="btnLast" class="icon" type="button" title="Last page (End)" aria-label="Last page">⏭</button>
     <button class="icon bm-toggle" type="button" title="Bookmark this page (B)" aria-label="Bookmark this page">☆</button>
     <button class="icon" type="button" data-open="bookmarks" title="Bookmarks (M)" aria-label="Bookmarks">🔖</button>
+    <button class="textbtn" type="button" data-open="contents" title="Contents (C)">Contents</button>
+    <button class="textbtn" type="button" data-open="notes" title="Highlights and notes (H)">Notes</button>
     <button id="btnZoom" class="icon" type="button" title="Zoom (Z / double-click)" aria-label="Zoom">🔍</button>
     <button id="btnFull" class="icon" type="button" title="Fullscreen (F)" aria-label="Fullscreen">⛶</button>
     <button class="offline-pill" type="button" data-open="menu" title="Offline status"><span class="dot"></span><span class="txt">Offline…</span></button>
@@ -112,12 +114,46 @@
   <button class="bb-page" type="button" aria-label="Go to page"><span class="bb-num">1</span><small>of <b class="pageCount">–</b></small></button>
   <button class="bb-next" type="button" aria-label="Next page"><span>▶</span><small>Next</small></button>
   <button type="button" data-open="search" aria-label="Search"><span>🔍</span><small>Search</small></button>
+  <button type="button" data-open="contents" aria-label="Contents"><span>☰</span><small>Contents</small></button>
+  <button type="button" data-open="notes" aria-label="Highlights and notes"><span>✎</span><small>Notes</small></button>
   <button class="bm-toggle" type="button" aria-label="Bookmark this page"><span>☆</span><small>Mark</small></button>
   <button type="button" data-open="bookmarks" aria-label="Bookmarks"><span>🔖</span><small>Saved</small></button>
   <button type="button" data-open="menu" aria-label="More"><span>⋯</span><small>More</small></button>
 </nav>
 
 <section id="searchSheet" class="sheet hidden" aria-label="Search"></section>
+
+<section id="contentsSheet" class="sheet panel hidden" aria-label="Contents">
+  <div class="sheethead"><b>Contents</b><button class="icon" type="button" data-close="contents" aria-label="Close">✕</button></div>
+  <div class="sheetbody">
+    <h4>In this PDF</h4>
+    <div id="outlineList"></div>
+    <p id="outlineEmpty" class="muted small">This PDF has no table of contents.</p>
+    <h4>Your chapters</h4>
+    <form id="chapterForm" class="chapter-form">
+      <input id="chapterTitle" type="text" maxlength="120" placeholder="Chapter title" enterkeyhint="next" aria-label="Chapter title">
+      <input id="chapterPage" type="number" inputmode="numeric" min="1" placeholder="Page" aria-label="Page number">
+      <button type="submit" id="chapterSave">Add</button>
+      <button type="button" id="chapterCancel" class="hidden">Cancel</button>
+    </form>
+    <div id="chapterList"></div>
+    <p class="muted small">Chapters you add stay in this browser with this book. They are not written into the PDF, and they are not synced to other devices. Clearing this site’s data removes them.</p>
+  </div>
+</section>
+
+<section id="notesSheet" class="sheet panel hidden" aria-label="Highlights and notes">
+  <div class="sheethead"><b>Notes</b><button class="icon" type="button" data-close="notes" aria-label="Close">✕</button></div>
+  <div class="sheetbody">
+    <div class="seg" id="markSeg" role="group" aria-label="Annotation mode">
+      <button type="button" data-mode="read">Read</button>
+      <button type="button" data-mode="area">Highlight</button>
+      <button type="button" data-mode="note">Note</button>
+    </div>
+    <p id="markHint" class="muted small">Read mode turns pages as usual. Highlight and Note pause page turns so you can mark the page, including a scan with no selectable text.</p>
+    <div id="noteList"></div>
+    <p class="muted small">Highlights and sticky notes stay in this browser with this book. They are not written into the PDF and are not synced. Clearing this site’s data removes them.</p>
+  </div>
+</section>
 
 <section id="bookmarksSheet" class="sheet panel hidden" aria-label="Bookmarks">
   <div class="sheethead"><b>Bookmarks</b><span class="muted" id="bmCount"></span><button class="icon" type="button" data-close="bookmarks" aria-label="Close">✕</button></div>
@@ -131,6 +167,10 @@
 <section id="menuSheet" class="sheet panel hidden" aria-label="Menu">
   <div class="sheethead"><b>Menu</b><button class="icon" type="button" data-close="menu" aria-label="Close">✕</button></div>
   <div class="sheetbody">
+    <div class="row">
+      <button class="wide" type="button" data-open="contents">Contents</button>
+      <button class="wide" type="button" data-open="notes">Highlights and notes</button>
+    </div>
     <h4>Offline</h4>
     <div class="offline-box">
       <div class="offline-status">Checking…</div>
@@ -172,7 +212,7 @@
       <button class="wide" id="btnLibraryMenu" type="button">Back to your books</button>
     </div>
     <h4>Keyboard</h4>
-    <p class="muted small keys">← → turn · Home/End · G go to page · / search · B bookmark · M bookmarks · N cursor · Z zoom · T thumbnails · F fullscreen</p>
+    <p class="muted small keys">← → turn · Home/End · G go to page · / search · B bookmark · M bookmarks · C contents · H notes · N cursor · Z zoom · T thumbnails · F fullscreen</p>
     <h4>Saved data</h4>
     <div class="row"><button id="btnResetData" class="danger" type="button">Clear bookmarks &amp; searches</button></div>
     <p class="muted small" id="versionInfo"></p>
@@ -193,6 +233,25 @@
   </form>
 </div>
 
+<div id="noteDialog" class="dialog hidden" role="dialog" aria-modal="true" aria-labelledby="noteDlgTitle">
+  <form id="noteForm" class="dlgcard">
+    <h3 id="noteDlgTitle">Sticky note</h3>
+    <p id="noteDlgMeta" class="muted small"></p>
+    <label id="noteTextLabel">Note <textarea id="noteText" maxlength="2000" rows="5" placeholder="Write a note"></textarea></label>
+    <div class="row end">
+      <button type="button" id="noteDelete" class="danger">Remove</button>
+      <span class="grow"></span>
+      <button type="button" id="noteCancel">Cancel</button>
+      <button type="submit" id="noteSave" class="primary">Save</button>
+    </div>
+  </form>
+</div>
+
+<div id="annoBanner" class="annobanner hidden" role="status">
+  <span id="annoBannerText"></span>
+  <button type="button" id="annoDone">Done</button>
+</div>
+
 <div id="zoom" class="zoom hidden">
   <div class="zoombar">
     <button id="zPrev" class="icon" type="button" aria-label="Previous page">◀</button>
@@ -204,7 +263,7 @@
     <button id="zFit" class="icon" type="button" aria-label="Fit">⤢</button>
     <button id="zClose" class="icon" type="button" aria-label="Close zoom">✕</button>
   </div>
-  <div id="zScroll" class="zscroll"><img id="zImg" alt=""></div>
+  <div id="zScroll" class="zscroll"><div id="zFrame"><img id="zImg" alt=""><div id="zMarks" class="marks"></div></div></div>
 </div>
 </div>
 

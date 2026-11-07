@@ -10,6 +10,14 @@
   let epoch = 0;
   let bookmarks = [];
   let recent = [];
+  let bookId = '';
+  let outline = [];
+  let chapters = [];
+  let annotations = [];
+  let annoMode = 'read';
+  let chapterEdit = '';
+  let noteEdit = null;
+  let markDrag = null;
   let DATA = { pages: [] };
   let flip = null, mode = null, imgs = [], current = 0, N = 0, phone = false, land = false;
   let wired = false;
@@ -93,13 +101,14 @@
       minWidth: L.m === 'portrait' ? 100000 : 50, maxWidth: 4000, minHeight: 50, maxHeight: 6000,
       showCover: true, usePortrait: true, autoSize: false, drawShadow: true,
       maxShadowOpacity: 0.5, flippingTime: phone ? 550 : 700, mobileScrollSupport: false,
-      showPageCorners: !phone && !coarse(), disableFlipByClick: true, useMouseEvents: !coarse(), swipeDistance: 30,
+      showPageCorners: annoMode === 'read' && !phone && !coarse(), disableFlipByClick: true, useMouseEvents: annoMode === 'read' && !coarse(), swipeDistance: 30,
       startPage: Math.max(0, Math.min(N - 1, startAt || 0))
     });
     flip.loadFromHTML(nodes);
     installBackwardTurn(flip);
     flip.on('flip', (e) => { if (myEpoch === epoch) onPage(e.data); });
     renderRibbons();
+    paintMarks();
     onPage(flip.getCurrentPageIndex());
   }
   function relayout(force) {
@@ -250,7 +259,7 @@
     let down = null, lastTap = null, tapTimer = null, pinchActive = false;
     const pts = new Map();
     stage.addEventListener('pointerdown', (e) => {
-      if (!SESSION) return;
+      if (!SESSION || annoMode !== 'read') return;
       pts.set(e.pointerId, e);
       down = pts.size === 1 ? { x: e.clientX, y: e.clientY, t: Date.now() } : null;
     });
@@ -258,7 +267,7 @@
       const had = pts.has(e.pointerId); pts.delete(e.pointerId);
       if (!had || !down) { if (!pts.size) down = null; return; }
       const dx = e.clientX - down.x, dy = e.clientY - down.y, dt = Date.now() - down.t; down = null;
-      if (!SESSION || !flip) return;
+      if (!SESSION || !flip || annoMode !== 'read') return;
       if (Math.hypot(dx, dy) > 12) {
         if (!coarse() || pinchActive) return;
         if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.3 && dt < 900) { if (dx < 0) next(); else prev(); }
@@ -286,7 +295,7 @@
     stage.addEventListener('pointercancel', (e) => { pts.delete(e.pointerId); down = null; });
 
     addEventListener('touchstart', (e) => {
-      if (!SESSION || zoomOpen() || e.touches.length < 2 || !e.target.closest('#stage')) return;
+      if (!SESSION || zoomOpen() || annoMode !== 'read' || e.touches.length < 2 || !e.target.closest('#stage')) return;
       e.preventDefault(); e.stopPropagation();
       try { if (flip && flip.ui) flip.ui.touchPoint = null; } catch (er) {}
       const [a, b] = e.touches; const cx = (a.clientX + b.clientX) / 2, cy = (a.clientY + b.clientY) / 2;
@@ -323,6 +332,7 @@
       $('#zImg').src = url || '';
     }).catch(() => {});
     $('#zLabel').textContent = `Page ${i + 1}`;
+    paintZoomMarks();
   }
   function fitWidth() { const s = $('#zScroll'); return Math.min(s.clientWidth - (phone ? 8 : 40), (s.clientHeight - (phone ? 8 : 40)) / RATIO); }
   function zoomApply() {
@@ -417,7 +427,8 @@
     if (open) requestAnimationFrame(layoutThumbs);
   }
 
-  const SHEETS = { search: '#searchSheet', bookmarks: '#bookmarksSheet', menu: '#menuSheet', sidebar: '#sidebar' };
+  const SHEETS = { search: '#searchSheet', bookmarks: '#bookmarksSheet', contents: '#contentsSheet', notes: '#notesSheet', menu: '#menuSheet', sidebar: '#sidebar' };
+  const PANEL_SHEETS = ['bookmarks', 'contents', 'notes', 'menu', 'search'];
   function blockersOpen() {
     const importer = $('#importer'), offer = $('#ocrOffer');
     return (importer && !importer.classList.contains('hidden')) || (offer && !offer.classList.contains('hidden'));
@@ -426,10 +437,12 @@
     if (!SESSION || blockersOpen()) return;
     if (name === 'sidebar') { setSidebar($('#sidebar').classList.contains('hidden')); return; }
     if (name === 'search' && !phone) { $('#searchInput').focus(); $('#searchResults').classList.remove('hidden'); renderSearch($('#searchInput').value); return; }
-    for (const k of ['bookmarks', 'menu', 'search']) if (k !== name) $(SHEETS[k]).classList.add('hidden');
+    for (const k of PANEL_SHEETS) if (k !== name) $(SHEETS[k]).classList.add('hidden');
     const el = $(SHEETS[name]);
     el.classList.remove('hidden');
     if (name === 'bookmarks') renderBookmarks();
+    if (name === 'contents') renderContents();
+    if (name === 'notes') renderNotes();
     if (name === 'menu') { renderMenu(); document.dispatchEvent(new CustomEvent('flipbook-menu')); }
     if (name === 'search') { $('#searchResults').classList.remove('hidden'); renderSearch($('#searchInput').value); setTimeout(() => $('#searchInput').focus(), 50); }
   }
@@ -438,8 +451,8 @@
     const el = $(SHEETS[name]); if (el) el.classList.add('hidden');
     if (name === 'search') { const input = $('#searchInput'); if (input) input.blur(); }
   }
-  const anySheetOpen = () => ['#searchSheet', '#bookmarksSheet', '#menuSheet'].some((s) => !$(s).classList.contains('hidden')) || (phone && !$('#sidebar').classList.contains('hidden'));
-  function closeAll() { ['search', 'bookmarks', 'menu'].forEach(closeSheet); if (phone) closeSheet('sidebar'); }
+  const anySheetOpen = () => ['#searchSheet', '#bookmarksSheet', '#contentsSheet', '#notesSheet', '#menuSheet'].some((s) => !$(s).classList.contains('hidden')) || (phone && !$('#sidebar').classList.contains('hidden'));
+  function closeAll() { PANEL_SHEETS.forEach(closeSheet); if (phone) closeSheet('sidebar'); }
   function placeSearch() {
     const s = $('#search'); if (!s) return;
     if (phone && s.parentElement.id !== 'searchSheet') $('#searchSheet').appendChild(s);
@@ -655,6 +668,17 @@
     $('#menuPage').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#menuGo').click(); });
     $$('#layoutSeg button').forEach((b) => b.onclick = () => { state.layout = b.dataset.layout; saveState(); renderMenu(); relayout(true); });
     $$('#themeSeg button').forEach((b) => b.onclick = () => { if (window.Theme) { Theme.set(b.dataset.theme); renderMenu(); } });
+    $$('#markSeg button').forEach((b) => b.onclick = () => setAnnoMode(b.dataset.mode));
+    const chapterForm = $('#chapterForm');
+    if (chapterForm) chapterForm.onsubmit = (e) => { e.preventDefault(); saveChapter(); };
+    const chapterCancel = $('#chapterCancel');
+    if (chapterCancel) chapterCancel.onclick = () => { chapterEdit = ''; renderContents(); };
+    const noteForm = $('#noteForm');
+    if (noteForm) noteForm.onsubmit = (e) => { e.preventDefault(); saveNoteDialog(); };
+    $('#noteCancel').onclick = closeNoteDialog;
+    $('#noteDelete').onclick = () => { if (noteEdit && noteEdit.id) removeAnnotation(noteEdit.id); closeNoteDialog(); };
+    $('#noteDialog').addEventListener('click', (e) => { if (e.target.id === 'noteDialog') closeNoteDialog(); });
+    $('#annoDone').onclick = () => setAnnoMode('read');
     $$('#fairySeg button').forEach((b) => b.onclick = () => { if (window.Fairy) { Fairy.setCursor(b.dataset.cursor); renderMenu(); } });
     $('#fairySound').onchange = (e) => { if (window.Fairy) Fairy.setSound(e.target.checked); };
     const playSound = $('#btnPlaySound');
@@ -716,6 +740,7 @@
     document.addEventListener('keydown', (e) => {
       if (!SESSION || blockersOpen()) return;
       if (!$('#dialog').classList.contains('hidden')) { if (e.key === 'Escape') closeDialog(); return; }
+      if (!$('#noteDialog').classList.contains('hidden')) { if (e.key === 'Escape') closeNoteDialog(); return; }
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
       if (zoomOpen()) {
         if (e.key === 'Escape') zoomClose(); else if (e.key === '+' || e.key === '=') zoomBy(1.25); else if (e.key === '-') zoomBy(1 / 1.25);
@@ -736,6 +761,8 @@
         case 'g': case 'G': e.preventDefault(); if (phone) openSheet('menu'); else { $('#pageInput').focus(); $('#pageInput').select(); } break;
         case 'b': case 'B': e.preventDefault(); toggleBookmark(); break;
         case 'm': case 'M': openSheet('bookmarks'); break;
+        case 'c': case 'C': openSheet('contents'); break;
+        case 'h': case 'H': openSheet('notes'); break;
         case 'n': case 'N':
           if (window.Fairy) {
             if (!Fairy.supported) toast('A custom cursor needs a mouse or trackpad');
@@ -752,6 +779,355 @@
     document.addEventListener('fairychange', () => { if (SESSION) renderMenu(); });
   }
 
+  function clamp01(n) {
+    const x = Number(n);
+    if (!Number.isFinite(x)) return 0;
+    return Math.min(1, Math.max(0, x));
+  }
+  function pageOfLayer(layer) {
+    if (!layer) return -1;
+    if (layer.id === 'zMarks') return zPage;
+    const page = layer.closest('.page');
+    return page ? +page.dataset.i : -1;
+  }
+  function normFromEvent(layer, event) {
+    const rect = layer.getBoundingClientRect();
+    return {
+      x: clamp01((event.clientX - rect.left) / Math.max(1, rect.width)),
+      y: clamp01((event.clientY - rect.top) / Math.max(1, rect.height))
+    };
+  }
+  function markButton(mark) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.dataset.mark = mark.id;
+    btn.className = mark.kind === 'note' ? 'mark-note' : 'mark-area';
+    btn.style.left = (mark.x * 100) + '%';
+    btn.style.top = (mark.y * 100) + '%';
+    if (mark.kind === 'area') {
+      btn.style.width = (mark.w * 100) + '%';
+      btn.style.height = (mark.h * 100) + '%';
+      btn.setAttribute('aria-label', `Highlight on page ${mark.page + 1}`);
+    } else {
+      btn.textContent = '✎';
+      btn.setAttribute('aria-label', mark.text ? `Note: ${mark.text}` : 'Sticky note');
+    }
+    return btn;
+  }
+  function fillLayer(layer, page) {
+    if (!layer) return;
+    layer.replaceChildren();
+    annotations.filter((mark) => mark.page === page).forEach((mark) => layer.appendChild(markButton(mark)));
+  }
+  function paintMarks() {
+    $$('#book .page').forEach((page) => {
+      let layer = page.querySelector('.marks');
+      if (!layer) {
+        layer = document.createElement('div');
+        layer.className = 'marks';
+        page.appendChild(layer);
+      }
+      fillLayer(layer, +page.dataset.i);
+    });
+    paintZoomMarks();
+  }
+  function paintZoomMarks() {
+    fillLayer($('#zMarks'), zPage);
+  }
+  function renderMarkMode() {
+    $$('#markSeg button').forEach((b) => {
+      const on = b.dataset.mode === annoMode;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    const hints = {
+      read: 'Read mode turns pages as usual. Highlight drags a rectangle. Note places a sticky note. Both work on a scanned page.',
+      area: 'Drag a rectangle on the page. Page turns are paused until you tap Done.',
+      note: 'Tap the page where the note should sit. Page turns are paused until you tap Done.'
+    };
+    const hint = $('#markHint');
+    if (hint) hint.textContent = hints[annoMode] || hints.read;
+    const banner = $('#annoBanner');
+    const text = $('#annoBannerText');
+    if (banner) banner.classList.toggle('hidden', annoMode === 'read');
+    if (text) text.textContent = annoMode === 'area' ? 'Drag to highlight. Tap a highlight to remove it.' : 'Tap the page to add a note. Tap a note to edit it.';
+    document.body.classList.toggle('annotating', annoMode !== 'read');
+  }
+  function setAnnoMode(mode) {
+    annoMode = mode === 'area' || mode === 'note' ? mode : 'read';
+    if (flip) {
+      const settings = flip.getSettings();
+      settings.useMouseEvents = annoMode === 'read' && !coarse();
+      settings.showPageCorners = annoMode === 'read' && !phone && !coarse();
+    }
+    renderMarkMode();
+    if (annoMode !== 'read') closeSheet('notes');
+  }
+  function renderToc(nodes) {
+    const ul = document.createElement('ul');
+    ul.className = 'toc';
+    nodes.forEach((node) => {
+      const li = document.createElement('li');
+      if (node.page == null) {
+        const heading = document.createElement('div');
+        heading.className = 'toc-heading';
+        heading.textContent = node.title;
+        li.appendChild(heading);
+      } else {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'toc-item';
+        btn.innerHTML = `<span class="toc-label"></span><small></small>`;
+        btn.querySelector('.toc-label').textContent = node.title;
+        btn.querySelector('small').textContent = String(node.page + 1);
+        btn.onclick = () => { go(node.page, false); if (phone) closeSheet('contents'); };
+        li.appendChild(btn);
+      }
+      if (node.items && node.items.length) li.appendChild(renderToc(node.items));
+      ul.appendChild(li);
+    });
+    return ul;
+  }
+  function renderContents() {
+    const list = $('#outlineList');
+    const empty = $('#outlineEmpty');
+    if (!list) return;
+    list.replaceChildren();
+    const hasOutline = outline && outline.length;
+    if (empty) empty.classList.toggle('hidden', !!hasOutline);
+    if (hasOutline) list.appendChild(renderToc(outline));
+    const save = $('#chapterSave');
+    const cancel = $('#chapterCancel');
+    const title = $('#chapterTitle');
+    const page = $('#chapterPage');
+    const editing = chapters.find((ch) => ch.id === chapterEdit);
+    if (save) save.textContent = editing ? 'Save' : 'Add';
+    if (cancel) cancel.classList.toggle('hidden', !editing);
+    if (title && document.activeElement !== title) title.value = editing ? editing.title : '';
+    if (page) {
+      page.max = N || 1;
+      if (document.activeElement !== page) page.value = editing ? String(editing.page + 1) : '';
+    }
+    const box = $('#chapterList');
+    if (!box) return;
+    box.replaceChildren();
+    if (!chapters.length) {
+      const p = document.createElement('p');
+      p.className = 'muted small';
+      p.textContent = 'No chapters added on this device.';
+      box.appendChild(p);
+      return;
+    }
+    chapters.forEach((ch) => {
+      const row = document.createElement('div');
+      row.className = 'chapter-row';
+      const jump = document.createElement('button');
+      jump.type = 'button';
+      jump.className = 'jump';
+      jump.innerHTML = '<span class="toc-label"></span><small></small>';
+      jump.querySelector('.toc-label').textContent = ch.title;
+      jump.querySelector('small').textContent = 'p. ' + (ch.page + 1);
+      jump.onclick = () => { go(ch.page, false); if (phone) closeSheet('contents'); };
+      const edit = document.createElement('button');
+      edit.type = 'button';
+      edit.className = 'mini';
+      edit.textContent = 'Edit';
+      edit.onclick = () => { chapterEdit = ch.id; renderContents(); $('#chapterTitle').focus(); };
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'mini danger';
+      remove.textContent = 'Remove';
+      remove.onclick = () => deleteChapter(ch.id);
+      row.append(jump, edit, remove);
+      box.appendChild(row);
+    });
+  }
+  async function saveChapter() {
+    if (!bookId) return;
+    const title = ($('#chapterTitle').value || '').replace(/\s+/g, ' ').trim();
+    const page = (+$('#chapterPage').value || 0) - 1;
+    if (!title) { toast('Give the chapter a title.'); return; }
+    if (page < 0 || page >= N) { toast('That page is not in this book.'); return; }
+    const existing = chapters.find((ch) => ch.id === chapterEdit);
+    try {
+      const saved = await BookDB.putChapter({
+        id: existing && existing.id, bookId, title, page, created: existing && existing.created
+      });
+      if (existing) Object.assign(existing, saved);
+      else chapters.push(saved);
+      chapters.sort((a, b) => a.page - b.page || a.created - b.created);
+      chapterEdit = '';
+      renderContents();
+      toast(existing ? 'Chapter updated.' : 'Chapter added on this device.');
+    } catch (err) {
+      toast((err && err.message) || 'Could not save that chapter.');
+    }
+  }
+  async function deleteChapter(id) {
+    try { await BookDB.deleteChapter(id); } catch (e) {}
+    chapters = chapters.filter((ch) => ch.id !== id);
+    if (chapterEdit === id) chapterEdit = '';
+    renderContents();
+    toast('Chapter removed.');
+  }
+  function renderNotes() {
+    renderMarkMode();
+    const box = $('#noteList');
+    if (!box) return;
+    box.replaceChildren();
+    if (!annotations.length) {
+      const p = document.createElement('p');
+      p.className = 'muted';
+      p.textContent = 'No highlights or notes yet.';
+      box.appendChild(p);
+      return;
+    }
+    annotations.forEach((mark) => {
+      const row = document.createElement('div');
+      row.className = 'note-row';
+      const jump = document.createElement('button');
+      jump.type = 'button';
+      jump.className = 'jump';
+      const kind = document.createElement('div');
+      kind.className = 'kind';
+      kind.textContent = mark.kind === 'note' ? 'Note' : 'Highlight';
+      const label = document.createElement('div');
+      label.className = 'toc-label';
+      label.textContent = mark.kind === 'note' ? (mark.text || 'Empty note') : 'Rectangle on the page';
+      const where = document.createElement('small');
+      where.textContent = 'p. ' + (mark.page + 1);
+      jump.append(kind, label, where);
+      jump.onclick = () => { go(mark.page, false); if (phone) closeSheet('notes'); };
+      const edit = document.createElement('button');
+      edit.type = 'button';
+      edit.className = 'mini';
+      edit.textContent = 'Edit';
+      edit.onclick = () => openMark(mark.id);
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'mini danger';
+      remove.textContent = 'Remove';
+      remove.onclick = () => removeAnnotation(mark.id);
+      row.append(jump, edit, remove);
+      box.appendChild(row);
+    });
+  }
+  function showNoteDialog(mark) {
+    noteEdit = mark;
+    $('#noteDlgTitle').textContent = mark.kind === 'note' ? 'Sticky note' : 'Highlight';
+    $('#noteDlgMeta').textContent = `Page ${mark.page + 1}. Saved only in this browser.`;
+    $('#noteTextLabel').classList.toggle('hidden', mark.kind !== 'note');
+    $('#noteText').value = mark.text || '';
+    $('#noteSave').classList.toggle('hidden', mark.kind !== 'note');
+    $('#noteDialog').classList.remove('hidden');
+    if (mark.kind === 'note') $('#noteText').focus();
+  }
+  function openMark(id) {
+    const mark = annotations.find((item) => item.id === id);
+    if (mark) showNoteDialog(mark);
+  }
+  function closeNoteDialog() {
+    noteEdit = null;
+    const dialog = $('#noteDialog');
+    if (dialog) dialog.classList.add('hidden');
+  }
+  async function saveNoteDialog() {
+    if (!noteEdit || noteEdit.kind !== 'note') { closeNoteDialog(); return; }
+    const text = ($('#noteText').value || '').trim();
+    if (!text) { toast('Write a note, or remove it.'); return; }
+    try {
+      const saved = await BookDB.putAnnotation({ ...noteEdit, bookId, kind: 'note', text });
+      const index = annotations.findIndex((item) => item.id === saved.id);
+      if (index >= 0) annotations[index] = saved;
+      else annotations.push(saved);
+      annotations.sort((a, b) => a.page - b.page || a.y - b.y || a.created - b.created);
+      paintMarks();
+      renderNotes();
+      closeNoteDialog();
+    } catch (err) {
+      toast((err && err.message) || 'Could not save that note.');
+    }
+  }
+  async function removeAnnotation(id) {
+    try { await BookDB.deleteAnnotation(id); } catch (e) {}
+    annotations = annotations.filter((item) => item.id !== id);
+    paintMarks();
+    renderNotes();
+    toast('Removed.');
+  }
+  async function addAnnotation(partial) {
+    const saved = await BookDB.putAnnotation({ ...partial, bookId });
+    annotations.push(saved);
+    annotations.sort((a, b) => a.page - b.page || a.y - b.y || a.created - b.created);
+    paintMarks();
+    renderNotes();
+    return saved;
+  }
+  function onMarkPointerDown(event) {
+    if (annoMode === 'read' || !SESSION) return;
+    const layer = event.target.closest && event.target.closest('.marks');
+    if (!layer) return;
+    const page = pageOfLayer(layer);
+    if (page < 0 || page >= N) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const existing = event.target.closest('[data-mark]');
+    if (existing) { openMark(existing.dataset.mark); return; }
+    const start = normFromEvent(layer, event);
+    markDrag = { layer, page, pointer: event.pointerId, start, x: start.x, y: start.y, moved: false };
+    try { layer.setPointerCapture(event.pointerId); } catch (e) {}
+  }
+  function onMarkPointerMove(event) {
+    if (!markDrag || event.pointerId !== markDrag.pointer) return;
+    const point = normFromEvent(markDrag.layer, event);
+    if (Math.hypot(point.x - markDrag.start.x, point.y - markDrag.start.y) > 0.01) markDrag.moved = true;
+    markDrag.x = point.x;
+    markDrag.y = point.y;
+    if (annoMode !== 'area') return;
+    let draft = markDrag.layer.querySelector('.mark-draft');
+    if (!draft) {
+      draft = document.createElement('div');
+      draft.className = 'mark-draft';
+      markDrag.layer.appendChild(draft);
+    }
+    const x = Math.min(markDrag.start.x, point.x);
+    const y = Math.min(markDrag.start.y, point.y);
+    draft.style.left = (x * 100) + '%';
+    draft.style.top = (y * 100) + '%';
+    draft.style.width = (Math.abs(point.x - markDrag.start.x) * 100) + '%';
+    draft.style.height = (Math.abs(point.y - markDrag.start.y) * 100) + '%';
+  }
+  async function onMarkPointerUp(event) {
+    if (!markDrag || event.pointerId !== markDrag.pointer) return;
+    const drag = markDrag;
+    markDrag = null;
+    const draft = drag.layer.querySelector('.mark-draft');
+    if (draft) draft.remove();
+    const point = normFromEvent(drag.layer, event);
+    try {
+      if (annoMode === 'area' && drag.moved) {
+        const x = Math.min(drag.start.x, point.x);
+        const y = Math.min(drag.start.y, point.y);
+        const w = Math.abs(point.x - drag.start.x);
+        const h = Math.abs(point.y - drag.start.y);
+        if (w >= 0.02 && h >= 0.02) await addAnnotation({ page: drag.page, kind: 'area', x, y, w, h, text: '' });
+      } else if (annoMode === 'note' && !drag.moved) {
+        showNoteDialog({ page: drag.page, kind: 'note', x: point.x, y: point.y, text: '' });
+      }
+    } catch (err) {
+      toast((err && err.message) || 'Could not save that mark.');
+    }
+  }
+  document.addEventListener('pointerdown', onMarkPointerDown, true);
+  document.addEventListener('pointermove', onMarkPointerMove, true);
+  document.addEventListener('pointerup', onMarkPointerUp, true);
+  document.addEventListener('pointercancel', (event) => {
+    if (!markDrag || event.pointerId !== markDrag.pointer) return;
+    const draft = markDrag.layer.querySelector('.mark-draft');
+    if (draft) draft.remove();
+    markDrag = null;
+  }, true);
+
   function publishDebug() {
     window.__flipbook = {
       get current() { return current; },
@@ -759,6 +1135,8 @@
       get phone() { return phone; },
       get bookmarks() { return bookmarks.map((b) => ({ ...b })); },
       get pageCount() { return N; },
+      get visible() { return visiblePages(); },
+      get annoMode() { return annoMode; },
       get title() { return SESSION ? SESSION.title : ''; },
       go, next, prev
     };
@@ -779,6 +1157,13 @@
     });
     bookmarks = (session.bookmarks || []).map((b) => ({ ...b }));
     recent = (session.recent || []).slice();
+    bookId = session.bookId || '';
+    outline = Array.isArray(session.outline) ? session.outline : [];
+    chapters = Array.isArray(session.chapters) ? session.chapters.map((ch) => ({ ...ch })) : [];
+    chapterEdit = '';
+    annoMode = 'read';
+    try { annotations = bookId ? await BookDB.listAnnotations(bookId) : []; }
+    catch (e) { annotations = []; }
     zScale = state.zoom || 1;
     setTitle(session.title);
     $$('.pageCount').forEach((el) => { el.textContent = N; });
@@ -798,6 +1183,7 @@
     if (state.sidebar && !phone) { $('#sidebar').classList.remove('hidden'); document.body.classList.add('sb'); }
     else { $('#sidebar').classList.add('hidden'); document.body.classList.remove('sb'); }
     build(start);
+    renderMarkMode();
     await ensureLoaded(start);
     updateBmToggle();
     renderMenu();
@@ -821,7 +1207,18 @@
     if (zoom) zoom.classList.add('hidden');
     const dialog = $('#dialog');
     if (dialog) dialog.classList.add('hidden');
-    ['search', 'bookmarks', 'menu'].forEach((name) => { const el = $(SHEETS[name]); if (el) el.classList.add('hidden'); });
+    PANEL_SHEETS.forEach((name) => { const el = $(SHEETS[name]); if (el) el.classList.add('hidden'); });
+    bookId = '';
+    outline = [];
+    chapters = [];
+    annotations = [];
+    annoMode = 'read';
+    chapterEdit = '';
+    const banner = $('#annoBanner');
+    if (banner) banner.classList.add('hidden');
+    document.body.classList.remove('annotating');
+    const noteBox = $('#noteDialog');
+    if (noteBox) noteBox.classList.add('hidden');
   }
 
   function setTexts(texts) {

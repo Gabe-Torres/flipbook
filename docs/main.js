@@ -122,6 +122,9 @@
         zoom: book.zoom || 1,
         sidebar: !!book.sidebar
       },
+      bookId: id,
+      outline: Array.isArray(book.outline) ? book.outline : [],
+      chapters: book.chapters || [],
       bookmarks: book.bookmarks || [],
       recent: book.recent || [],
       explicitPage: explicitPage == null ? null : explicitPage,
@@ -144,6 +147,23 @@
       toast('That book is not saved in this browser.');
       await showLibrary();
       return;
+    }
+    try {
+      const stored = await BookDB.getOutline(id);
+      if (stored) book.outline = stored;
+      else if (book.hasPdf && window.PdfImport && PdfImport.outlineFromBlob) {
+        const blob = await BookDB.getPdf(id);
+        const outline = blob ? await PdfImport.outlineFromBlob(blob) : [];
+        await BookDB.putOutline(id, outline);
+        book.outline = outline;
+      } else {
+        book.outline = [];
+        await BookDB.putOutline(id, []);
+      }
+      book.chapters = await BookDB.listChapters(id);
+    } catch (e) {
+      book.outline = book.outline || [];
+      book.chapters = book.chapters || [];
     }
     const texts = await BookDB.getTexts(id);
     Reader.close();
