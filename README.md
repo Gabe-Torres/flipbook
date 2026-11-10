@@ -17,6 +17,7 @@ A scanned PDF with no text layer can run English text recognition, also on this 
 On a computer:
 
 - Drag a corner to turn a page, or use the arrows. Home and End jump to the ends.
+- The menu’s Page turn control, or `A`, turns the curl off. Instant jumps to the next sheet. That choice stays in this browser for every book.
 - `/` searches. Enter jumps to the next hit. Quotes around a phrase look for those exact words.
 - `B` bookmarks the page. You can give it a label. `M` opens the list. Bookmarked pages get a red ribbon.
 - `C` opens the contents. If the PDF has an outline, those chapters are listed, including nested ones, and a click turns to that page. A PDF with no outline says so. You can add your own chapters, with a title and a page number. Those stay in this browser with the book.

@@ -127,6 +127,20 @@ try {
   await page.waitForTimeout(400);
   await shot('reader_spread.png');
 
+  await page.click('[data-open="menu"]');
+  await page.click('#animSeg [data-anim="off"]');
+  const jumped = await page.evaluate(() => {
+    const from = window.__flipbook.current;
+    window.__flipbook.next();
+    return { from, to: window.__flipbook.current, saved: localStorage.getItem('flipbook.animate') };
+  });
+  if (!(jumped.to > jumped.from)) await fail('turning animation off did not jump to the next page');
+  if (jumped.saved !== '0') await fail('instant page turns were not saved');
+  await page.click('#animSeg [data-anim="on"]');
+  await page.click('[data-close="menu"]');
+  await page.evaluate(() => window.__flipbook.go(1, false));
+  await page.waitForFunction(() => window.__flipbook.current === 1);
+
   await page.fill('#searchInput', 'marigold');
   await page.waitForSelector('.result', { timeout: 10000 });
   const searchText = await page.locator('#searchResults').innerText();

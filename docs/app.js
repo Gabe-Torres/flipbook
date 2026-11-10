@@ -96,12 +96,14 @@
     }
     const pw = SESSION.pageWidth || 1000;
     const ph = SESSION.pageHeight || Math.round(pw * RATIO);
+    const curl = curls();
     flip = new St.PageFlip($('#book'), {
       width: pw, height: ph, size: 'stretch',
       minWidth: L.m === 'portrait' ? 100000 : 50, maxWidth: 4000, minHeight: 50, maxHeight: 6000,
-      showCover: true, usePortrait: true, autoSize: false, drawShadow: true,
+      showCover: true, usePortrait: true, autoSize: false, drawShadow: curl,
       maxShadowOpacity: 0.5, flippingTime: phone ? 550 : 700, mobileScrollSupport: false,
-      showPageCorners: annoMode === 'read' && !phone && !coarse(), disableFlipByClick: true, useMouseEvents: annoMode === 'read' && !coarse(), swipeDistance: 30,
+      showPageCorners: curl && annoMode === 'read' && !phone && !coarse(), disableFlipByClick: true,
+      useMouseEvents: curl && annoMode === 'read' && !coarse(), swipeDistance: 30,
       startPage: Math.max(0, Math.min(N - 1, startAt || 0))
     });
     flip.loadFromHTML(nodes);
@@ -161,24 +163,51 @@
     updateBmToggle();
   }
   let turningBack = false;
-  function go(i, animate = true) {
+  function curls() {
+    try { return localStorage.getItem('flipbook.animate') !== '0'; } catch (e) { return true; }
+  }
+  function setPageTurn(on, announce) {
+    try { localStorage.setItem('flipbook.animate', on ? '1' : '0'); } catch (e) {}
+    turningBack = false;
+    renderMenu();
+    if (SESSION && N) build(current);
+    if (announce) toast(on ? 'Page turn animation on' : 'Pages turn instantly');
+  }
+  function go(i, doAnim = true) {
     i = Math.max(0, Math.min(N - 1, i | 0));
     ensureLoaded(i);
     if (!flip || turningBack) return;
     const from = flip.getCurrentPageIndex();
     const distance = Math.abs(i - from);
     const portrait = onePage(flip);
-    if (animate && portrait && i < from) {
+    const curl = doAnim && curls();
+    if (curl && portrait && i < from) {
       if (from - i === 1) curlPortraitBack(flip);
       else flip.turnToPage(i);
       return;
     }
-    if (animate && distance > 0 && distance <= 2) viaLib(() => flip.flip(i));
+    if (curl && distance > 0 && distance <= 2) viaLib(() => flip.flip(i));
     else flip.turnToPage(i);
   }
   function viaLib(fn) { if (!flip) return; const st = flip.getSettings(); st.disableFlipByClick = false; try { fn(); } finally { st.disableFlipByClick = true; } }
-  const next = () => { if (turningBack) return; ensureLoaded(current + 1); viaLib(() => flip.flipNext()); };
-  const prev = () => { if (turningBack) return; ensureLoaded(current - 1); viaLib(() => flip.flipPrev()); };
+  function instantStep(dir) {
+    const cur = flip.getCurrentPageIndex();
+    let dest;
+    if (onePage(flip)) dest = cur + dir;
+    else if (dir > 0) dest = cur === 0 ? 1 : cur + 2;
+    else dest = cur <= 1 ? 0 : cur - 2;
+    if (dest >= 0 && dest < N && dest !== cur) flip.turnToPage(dest);
+  }
+  const next = () => {
+    if (!flip || turningBack) return;
+    ensureLoaded(current + (onePage(flip) ? 1 : 2));
+    if (curls()) viaLib(() => flip.flipNext()); else instantStep(1);
+  };
+  const prev = () => {
+    if (!flip || turningBack) return;
+    ensureLoaded(current - 1);
+    if (curls()) viaLib(() => flip.flipPrev()); else instantStep(-1);
+  };
   function onePage(book) {
     return mode === 'portrait' || !!(book && book.getOrientation && book.getOrientation() === 'portrait');
   }
@@ -587,6 +616,12 @@
 
   function renderMenu() {
     $$('#layoutSeg button').forEach((b) => b.classList.toggle('on', b.dataset.layout === state.layout));
+    const curlOn = curls();
+    $$('#animSeg button').forEach((b) => {
+      const on = (b.dataset.anim === 'on') === curlOn;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
     const version = $('#versionInfo');
     if (version) version.textContent = `Version ${V.version}`;
     const menuPage = $('#menuPage');
@@ -667,6 +702,7 @@
     $('#menuGo').onclick = () => { const v = +$('#menuPage').value; if (v) { go(v - 1, false); closeSheet('menu'); } };
     $('#menuPage').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#menuGo').click(); });
     $$('#layoutSeg button').forEach((b) => b.onclick = () => { state.layout = b.dataset.layout; saveState(); renderMenu(); relayout(true); });
+    $$('#animSeg button').forEach((b) => b.onclick = () => setPageTurn(b.dataset.anim === 'on', true));
     $$('#themeSeg button').forEach((b) => b.onclick = () => { if (window.Theme) { Theme.set(b.dataset.theme); renderMenu(); } });
     $$('#markSeg button').forEach((b) => b.onclick = () => setAnnoMode(b.dataset.mode));
     const chapterForm = $('#chapterForm');
@@ -763,6 +799,7 @@
         case 'm': case 'M': openSheet('bookmarks'); break;
         case 'c': case 'C': openSheet('contents'); break;
         case 'h': case 'H': openSheet('notes'); break;
+        case 'a': case 'A': e.preventDefault(); setPageTurn(!curls(), true); break;
         case 'n': case 'N':
           if (window.Fairy) {
             if (!Fairy.supported) toast('A custom cursor needs a mouse or trackpad');
@@ -857,8 +894,9 @@
     annoMode = mode === 'area' || mode === 'note' ? mode : 'read';
     if (flip) {
       const settings = flip.getSettings();
-      settings.useMouseEvents = annoMode === 'read' && !coarse();
-      settings.showPageCorners = annoMode === 'read' && !phone && !coarse();
+      settings.useMouseEvents = curls() && annoMode === 'read' && !coarse();
+      settings.showPageCorners = curls() && annoMode === 'read' && !phone && !coarse();
+      settings.drawShadow = curls();
     }
     renderMarkMode();
     if (annoMode !== 'read') closeSheet('notes');
@@ -1138,7 +1176,8 @@
       get visible() { return visiblePages(); },
       get annoMode() { return annoMode; },
       get title() { return SESSION ? SESSION.title : ''; },
-      go, next, prev
+      get animate() { return curls(); },
+      go, next, prev, setPageTurn
     };
   }
 

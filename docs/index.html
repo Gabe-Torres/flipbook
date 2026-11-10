@@ -181,6 +181,10 @@
     <div class="seg" id="layoutSeg">
       <button type="button" data-layout="auto">Auto</button><button type="button" data-layout="single">One page</button><button type="button" data-layout="spread">Two pages</button>
     </div>
+    <h4>Page turn <span class="muted">(A)</span></h4>
+    <div class="seg" id="animSeg" role="group" aria-label="Page turn">
+      <button type="button" data-anim="on" aria-pressed="true">Flip</button><button type="button" data-anim="off" aria-pressed="false">Instant</button>
+    </div>
     <h4>Theme</h4>
     <div class="seg" id="themeSeg" role="group" aria-label="Theme">
       <button type="button" data-theme="light" aria-pressed="false">Light</button>
@@ -213,7 +217,7 @@
       <button class="wide" id="btnLibraryMenu" type="button">Back to your books</button>
     </div>
     <h4>Keyboard</h4>
-    <p class="muted small keys">← → turn · Home/End · G go to page · / search · B bookmark · M bookmarks · C contents · H notes · N cursor · Z zoom · T thumbnails · F fullscreen</p>
+    <p class="muted small keys">← → turn · A flip animation · Home/End · G go to page · / search · B bookmark · M bookmarks · C contents · H notes · N cursor · Z zoom · T thumbnails · F fullscreen</p>
     <h4>Saved data</h4>
     <div class="row"><button id="btnResetData" class="danger" type="button">Clear bookmarks &amp; searches</button></div>
     <p class="muted small" id="versionInfo"></p>
