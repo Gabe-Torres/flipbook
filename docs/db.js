@@ -50,21 +50,43 @@
     return dbp;
   }
 
-  function txDone(db, names, mode, fn) {
+  let imports = 0;
+
+  function setImporting(on) {
+    imports += on ? 1 : -1;
+    if (imports < 0) imports = 0;
+  }
+
+  function txDone(db, names, mode, fn, timeoutMs) {
     return new Promise((resolve, reject) => {
+      let settled = false;
       const tx = db.transaction(names, mode);
+      let timer = 0;
+      const finish = (err) => {
+        if (settled) return;
+        settled = true;
+        if (timer) clearTimeout(timer);
+        if (err) reject(err);
+        else resolve();
+      };
+      if (timeoutMs) {
+        timer = setTimeout(() => {
+          finish(new Error('Saving on this device is taking too long. The book already on this device was not removed.'));
+          try { tx.abort(); } catch (e) {}
+        }, timeoutMs);
+      }
       const stores = {};
       names.forEach((name) => { stores[name] = tx.objectStore(name); });
       try { fn(stores, tx); }
-      catch (err) { reject(err); try { tx.abort(); } catch (e) {} return; }
-      tx.oncomplete = () => resolve();
+      catch (err) { finish(err); try { tx.abort(); } catch (e) {} return; }
+      tx.oncomplete = () => finish();
       tx.onerror = (event) => {
         const err = tx.error || (event && event.target && event.target.error);
-        reject(err || new Error('Storage write failed'));
+        finish(err || new Error('Storage write failed'));
       };
       tx.onabort = (event) => {
         const err = tx.error || (event && event.target && event.target.error);
-        reject(err || new Error('Storage write was aborted'));
+        finish(err || new Error('Storage write was aborted'));
       };
     });
   }
@@ -81,29 +103,48 @@
     return req(db.transaction('books').objectStore('books').get(id));
   }
 
-  async function copyBlob(blob) {
-    if (!blob || typeof blob.arrayBuffer !== 'function' || !blob.size) return null;
+  // Safari often never finishes an IndexedDB write of a Blob. Bytes complete.
+  async function copyBytes(value) {
+    if (!value) return null;
     try {
-      const bytes = await blob.arrayBuffer();
-      if (!bytes || !bytes.byteLength) return null;
-      return new Blob([bytes], { type: blob.type || 'image/jpeg' });
-    } catch (e) {
-      return null;
+      if (value instanceof ArrayBuffer) return value.byteLength ? value : null;
+      if (ArrayBuffer.isView(value)) {
+        const bytes = value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength);
+        return bytes.byteLength ? bytes : null;
+      }
+      if (typeof value.arrayBuffer === 'function' && value.size !== 0) {
+        const bytes = await value.arrayBuffer();
+        return bytes && bytes.byteLength ? bytes : null;
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  function asBlob(value, type) {
+    const mime = type || 'application/octet-stream';
+    if (!value) return null;
+    if (typeof Blob !== 'undefined' && value instanceof Blob) return value.size ? value : null;
+    if (value instanceof ArrayBuffer) return value.byteLength ? new Blob([value], { type: mime }) : null;
+    if (ArrayBuffer.isView(value)) {
+      const bytes = value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength);
+      return bytes.byteLength ? new Blob([bytes], { type: mime }) : null;
     }
+    return null;
   }
 
   async function putCover(bookId, blob) {
-    const copy = await copyBlob(blob);
+    const copy = await copyBytes(blob);
     if (!copy) return null;
     const db = await open();
-    await txDone(db, ['covers'], 'readwrite', (stores) => { stores.covers.put({ bookId, blob: copy }); });
-    return copy;
+    await txDone(db, ['covers'], 'readwrite', (stores) => { stores.covers.put({ bookId, bytes: copy }); }, 20000);
+    return asBlob(copy, 'image/jpeg');
   }
 
   async function getCover(bookId) {
     const db = await open();
     const row = await req(db.transaction('covers').objectStore('covers').get(bookId));
-    if (row && row.blob && row.blob.size) return copyBlob(row.blob);
+    const stored = row && asBlob(row.bytes || row.blob, 'image/jpeg');
+    if (stored && stored.size) return stored;
     const book = await getBook(bookId);
     if (book && book.cover && book.cover.size) {
       const copy = await putCover(bookId, book.cover);
@@ -138,13 +179,13 @@
   }
 
   async function putPage(record) {
-    const image = await copyBlob(record.image);
-    const thumb = await copyBlob(record.thumb);
+    const image = await copyBytes(record.image);
+    const thumb = await copyBytes(record.thumb);
     if (!image || !thumb) throw new Error('Could not store a page image');
     const db = await open();
     await txDone(db, ['pages'], 'readwrite', (stores) => {
       stores.pages.put({ bookId: record.bookId, index: record.index, image, thumb });
-    });
+    }, 20000);
   }
 
   async function putText(bookId, index, text) {
@@ -156,7 +197,14 @@
 
   async function getPage(bookId, index) {
     const db = await open();
-    return req(db.transaction('pages').objectStore('pages').get([bookId, index]));
+    const row = await req(db.transaction('pages').objectStore('pages').get([bookId, index]));
+    if (!row) return null;
+    return {
+      bookId: row.bookId,
+      index: row.index,
+      image: asBlob(row.image, 'image/jpeg'),
+      thumb: asBlob(row.thumb, 'image/jpeg')
+    };
   }
 
   async function getTexts(bookId) {
@@ -172,78 +220,137 @@
   }
 
   async function putPdf(bookId, blob) {
+    const bytes = await copyBytes(blob);
+    if (!bytes) throw new Error('Could not read the PDF');
     const db = await open();
-    await txDone(db, ['pdfs'], 'readwrite', (stores) => { stores.pdfs.put({ bookId, blob }); });
+    await txDone(db, ['pdfs'], 'readwrite', (stores) => {
+      stores.pdfs.put({ bookId, bytes, type: (blob && blob.type) || 'application/pdf' });
+    }, 90000);
   }
 
   async function getPdf(bookId) {
     const db = await open();
     const row = await req(db.transaction('pdfs').objectStore('pdfs').get(bookId));
-    return row ? row.blob : null;
+    if (!row) return null;
+    return asBlob(row.bytes || row.blob, row.type || 'application/pdf');
   }
 
-  // Delete by primary key, then continue. cursor.delete() plus continue() in the
-  // same turn never finishes on some browsers, which locks the database.
-  // A key cursor avoids reading every page image while the store is locked.
-  function wipeIndex(store, indexName, id) {
-    const index = store.index(indexName);
-    const request = typeof index.openKeyCursor === 'function'
-      ? index.openKeyCursor(IDBKeyRange.only(id))
-      : index.openCursor(IDBKeyRange.only(id));
-    request.onsuccess = () => {
-      const cursor = request.result;
-      if (!cursor) return;
-      store.delete(cursor.primaryKey);
-      cursor.continue();
-    };
+  function bookIdFromKey(key) {
+    if (typeof key === 'string' && key) return key;
+    if (key && typeof key === 'object' && typeof key.length === 'number' && typeof key[0] === 'string') return key[0];
+    return '';
   }
 
-  function dropOrphans(store, ids, keyOnly) {
-    const request = keyOnly && typeof store.openKeyCursor === 'function'
-      ? store.openKeyCursor()
-      : store.openCursor();
-    request.onsuccess = () => {
-      const cursor = request.result;
-      if (!cursor) return;
-      let bookId = null;
-      if (keyOnly) {
-        const key = cursor.primaryKey;
-        bookId = Array.isArray(key) ? key[0] : key;
-      } else if (cursor.value && cursor.value.bookId) {
-        bookId = cursor.value.bookId;
+  // Read keys first, then delete them with no cursor open. Deleting the current
+  // cursor row never finishes on Safari and leaves the next import stuck.
+  function scanKeys(db, storeName, decide, values) {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(storeName, 'readonly');
+      const store = tx.objectStore(storeName);
+      const keys = [];
+      let request;
+      try {
+        request = !values && typeof store.openKeyCursor === 'function'
+          ? store.openKeyCursor()
+          : store.openCursor();
+      } catch (err) {
+        try { tx.abort(); } catch (e) {}
+        reject(err);
+        return;
       }
-      if (bookId && !ids.has(bookId)) store.delete(cursor.primaryKey);
-      cursor.continue();
-    };
+      request.onerror = () => reject(request.error || new Error('Could not read saved books'));
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (!cursor) return;
+        if (decide(cursor)) keys.push(cursor.primaryKey);
+        cursor.continue();
+      };
+      tx.oncomplete = () => resolve(keys);
+      tx.onerror = () => reject(tx.error || request.error || new Error('Could not read saved books'));
+      tx.onabort = () => reject(tx.error || new Error('Could not read saved books'));
+    });
+  }
+
+  function scanIndex(db, storeName, indexName, id) {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(storeName, 'readonly');
+      const index = tx.objectStore(storeName).index(indexName);
+      const keys = [];
+      const range = IDBKeyRange.only(id);
+      let request;
+      try {
+        request = typeof index.openKeyCursor === 'function'
+          ? index.openKeyCursor(range)
+          : index.openCursor(range);
+      } catch (err) {
+        try { tx.abort(); } catch (e) {}
+        reject(err);
+        return;
+      }
+      request.onerror = () => reject(request.error || new Error('Could not read saved books'));
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (!cursor) return;
+        keys.push(cursor.primaryKey);
+        cursor.continue();
+      };
+      tx.oncomplete = () => resolve(keys);
+      tx.onerror = () => reject(tx.error || request.error || new Error('Could not read saved books'));
+      tx.onabort = () => reject(tx.error || new Error('Could not read saved books'));
+    });
+  }
+
+  async function deleteKeys(storeName, keys) {
+    if (!keys || !keys.length) return;
+    const db = await open();
+    for (let i = 0; i < keys.length; i += 80) {
+      const chunk = keys.slice(i, i + 80);
+      await txDone(db, [storeName], 'readwrite', (stores) => {
+        chunk.forEach((key) => stores[storeName].delete(key));
+      }, 20000);
+    }
   }
 
   async function deleteBook(id) {
     const db = await open();
-    await txDone(db, ['books', 'pages', 'texts', 'pdfs', 'covers', 'outlines', 'chapters', 'annotations'], 'readwrite', (stores) => {
+    const pages = await scanIndex(db, 'pages', 'byBook', id);
+    const texts = await scanIndex(db, 'texts', 'byBook', id);
+    const chapters = await scanIndex(db, 'chapters', 'byBook', id);
+    const notes = await scanIndex(db, 'annotations', 'byBook', id);
+    await txDone(db, ['books', 'pdfs', 'covers', 'outlines'], 'readwrite', (stores) => {
       stores.books.delete(id);
       stores.pdfs.delete(id);
       stores.covers.delete(id);
       stores.outlines.delete(id);
-      wipeIndex(stores.pages, 'byBook', id);
-      wipeIndex(stores.texts, 'byBook', id);
-      wipeIndex(stores.chapters, 'byBook', id);
-      wipeIndex(stores.annotations, 'byBook', id);
-    });
+    }, 20000);
+    await deleteKeys('pages', pages);
+    await deleteKeys('texts', texts);
+    await deleteKeys('chapters', chapters);
+    await deleteKeys('annotations', notes);
     queues.delete(id);
   }
 
   async function vacuum() {
+    if (imports) return;
     const books = await listBooks();
     const ids = new Set(books.map((book) => book.id));
     const db = await open();
-    await txDone(db, ['pages', 'texts', 'pdfs', 'covers', 'outlines', 'chapters', 'annotations'], 'readwrite', (stores) => {
-      ['pages', 'texts', 'pdfs', 'covers', 'outlines'].forEach((name) => {
-        dropOrphans(stores[name], ids, true);
-      });
-      ['chapters', 'annotations'].forEach((name) => {
-        dropOrphans(stores[name], ids, false);
-      });
-    });
+    const keepKeyed = (cursor) => {
+      const bookId = bookIdFromKey(cursor.primaryKey);
+      return !!bookId && !ids.has(bookId);
+    };
+    const keepValued = (cursor) => {
+      const bookId = cursor.value && cursor.value.bookId;
+      return typeof bookId === 'string' && !!bookId && !ids.has(bookId);
+    };
+    for (const name of ['pages', 'texts', 'pdfs', 'covers', 'outlines']) {
+      if (imports) return;
+      await deleteKeys(name, await scanKeys(db, name, keepKeyed, false));
+    }
+    for (const name of ['chapters', 'annotations']) {
+      if (imports) return;
+      await deleteKeys(name, await scanKeys(db, name, keepValued, true));
+    }
   }
 
   async function getClickSound() {
@@ -375,7 +482,7 @@
   }
 
   window.BookDB = {
-    open, listBooks, getBook, putBook, patchBook, putPage, putText, getPage, getTexts, getCover, putPdf, getPdf, deleteBook, vacuum,
+    open, listBooks, getBook, putBook, patchBook, putPage, putText, getPage, getTexts, getCover, putPdf, getPdf, deleteBook, vacuum, setImporting,
     getClickSound, putClickSound, clearClickSound,
     getOutline, putOutline, listChapters, putChapter, deleteChapter, listAnnotations, putAnnotation, deleteAnnotation
   };

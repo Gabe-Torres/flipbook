@@ -6,10 +6,60 @@
     return new URL(path, document.baseURI).toString();
   }
 
+  function appleWebKitBrowser() {
+    const ua = navigator.userAgent || '';
+    if (/Chrome|Chromium|Edg\//.test(ua) && !/CriOS|EdgiOS|OPiOS/.test(ua)) return false;
+    return /AppleWebKit/.test(ua);
+  }
+
   function toBlob(canvas, type, quality) {
     return new Promise((resolve, reject) => {
-      canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('Could not encode a page image'))), type, quality);
+      let settled = false;
+      let timer = 0;
+      const finish = (err, blob) => {
+        if (settled) return;
+        settled = true;
+        if (timer) clearTimeout(timer);
+        if (err) reject(err);
+        else resolve(blob);
+      };
+      const fromDataUrl = () => {
+        const url = canvas.toDataURL(type, quality);
+        const comma = url.indexOf(',');
+        if (comma < 0) throw new Error('Could not encode a page image');
+        const raw = atob(url.slice(comma + 1));
+        const bytes = new Uint8Array(raw.length);
+        for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+        return new Blob([bytes], { type });
+      };
+      // Safari sometimes never calls the toBlob callback.
+      timer = setTimeout(() => {
+        try { finish(null, fromDataUrl()); }
+        catch (err) { finish(err); }
+      }, 8000);
+      try {
+        canvas.toBlob((blob) => {
+          if (blob) finish(null, blob);
+          else {
+            try { finish(null, fromDataUrl()); }
+            catch (err) { finish(err); }
+          }
+        }, type, quality);
+      } catch (err) {
+        try { finish(null, fromDataUrl()); }
+        catch (e) { finish(err); }
+      }
     });
+  }
+
+  function withTimeout(promise, ms, message) {
+    let timer;
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(message)), ms);
+      })
+    ]).finally(() => clearTimeout(timer));
   }
 
   function abortError() {
@@ -177,7 +227,9 @@
         data,
         cMapUrl: asset('vendor/pdfjs/cmaps/'),
         cMapPacked: true,
-        standardFontDataUrl: asset('vendor/pdfjs/standard_fonts/')
+        standardFontDataUrl: asset('vendor/pdfjs/standard_fonts/'),
+        // Safari's OffscreenCanvas path can leave page.render unresolved.
+        isOffscreenCanvasSupported: !appleWebKitBrowser()
       });
       if (signal) signal.addEventListener('abort', () => { try { task.destroy(); } catch (e) {} }, { once: true });
       try {
@@ -220,13 +272,19 @@
         if (!cover) cover = thumbBlob;
         bytes += image.size + thumbBlob.size;
         texts.push(text || '');
+        onProgress({
+          phase: 'render',
+          current: Math.min(leaf, n),
+          total: n,
+          detail: `Saving page ${leaf + 1} on this device`
+        });
         await BookDB.putPage({ bookId: id, index: leaf, image, thumb: thumbBlob });
         await BookDB.putText(id, leaf, text || '');
         leaf += 1;
       }
       for (let i = 1; i <= n; i++) {
         if (signal && signal.aborted) throw abortError();
-        const page = await pdf.getPage(i);
+        const page = await withTimeout(pdf.getPage(i), 20000, 'Opening this page is taking too long. The book already on this device was not removed.');
         const base = page.getViewport({ scale: 1 });
         const spread = splitWide && isSpread(base.width, base.height);
         if (spread) splitSheets += 1;
@@ -248,7 +306,7 @@
         const viewport = page.getViewport({ scale });
         canvas.width = Math.max(1, Math.ceil(viewport.width));
         canvas.height = Math.max(1, Math.ceil(viewport.height));
-        const ctx = canvas.getContext('2d', { alpha: false });
+        const ctx = canvas.getContext('2d', appleWebKitBrowser() ? { willReadFrequently: true } : { alpha: false });
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         const rendered = page.render({ canvasContext: ctx, viewport });
@@ -281,7 +339,7 @@
         }
         let items = [];
         try {
-          const content = await page.getTextContent();
+          const content = await withTimeout(page.getTextContent(), 15000, 'text');
           items = content.items || [];
         } catch (e) {}
         pageMap[i - 1] = leaf;
@@ -331,7 +389,14 @@
       }
       throw err;
     } finally {
-      try { if (pdf && pdf.destroy) await pdf.destroy(); } catch (e) {}
+      const dying = pdf;
+      pdf = null;
+      if (dying && dying.destroy) {
+        await Promise.race([
+          Promise.resolve().then(() => dying.destroy()).catch(() => {}),
+          new Promise((resolve) => setTimeout(resolve, 1500))
+        ]);
+      }
       canvas.width = 1;
       canvas.height = 1;
       thumb.width = 1;

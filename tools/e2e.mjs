@@ -188,6 +188,16 @@ try {
     const row = await BookDB.getPage('orphan-left-behind', 0);
     return !row;
   }, null, { timeout: 10000 });
+  await page.evaluate(async () => {
+    const id = new URLSearchParams(location.hash.slice(1)).get('b');
+    const blob = new Blob([new Uint8Array([255, 216, 255, 217])], { type: 'image/jpeg' });
+    await BookDB.putPage({ bookId: id, index: 99, image: blob, thumb: blob });
+    await BookDB.putPage({ bookId: 'other-book', index: 0, image: blob, thumb: blob });
+    await BookDB.deleteBook('other-book');
+    const kept = await BookDB.getPage(id, 99);
+    const gone = await BookDB.getPage('other-book', 0);
+    if (!kept || !kept.image || gone) throw new Error('deleteBook removed the wrong pages');
+  });
   await shot('resumed.png');
 
   await page.click('#btnLibrary');

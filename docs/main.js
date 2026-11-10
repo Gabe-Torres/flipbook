@@ -335,13 +335,16 @@
     $('#importer').classList.remove('hidden');
     showProgress({ phase: 'read', current: 0, total: 1, detail: file.name || 'PDF' });
     let result = null;
+    if (window.BookDB && BookDB.setImporting) BookDB.setImporting(true);
     try {
       result = await PdfImport.importFile(file, { signal: ac.signal, onProgress: showProgress, split: splitWideOn() });
     } catch (err) {
       console.error(err);
       toast((err && err.message) || 'Could not open that PDF');
+      if (!document.body.classList.contains('reading')) await refreshLibrary();
       return;
     } finally {
+      if (window.BookDB && BookDB.setImporting) BookDB.setImporting(false);
       $('#importer').classList.add('hidden');
       currentAbort = null;
     }
@@ -436,8 +439,10 @@
     let hadController = !!navigator.serviceWorker.controller;
     let refreshing = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (hadController && !refreshing) {
-        toast('Update available', 'Reload', () => { refreshing = true; location.reload(); }, 20000);
+      if (hadController && !refreshing && !currentAbort) {
+        refreshing = true;
+        location.reload();
+        return;
       }
       hadController = true;
     });
