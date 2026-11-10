@@ -251,11 +251,33 @@
         const ctx = canvas.getContext('2d', { alpha: false });
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
+        const rendered = page.render({ canvasContext: ctx, viewport });
+        const stopRender = () => { try { rendered.cancel(); } catch (e) {} };
+        if (signal) signal.addEventListener('abort', stopRender, { once: true });
+        let renderTimer;
+        const finished = rendered.promise.then(() => 'ok', (err) => {
+          if (signal && signal.aborted) throw abortError();
+          if (err && (err.name === 'RenderingCancelledException' || /cancel/i.test(String(err.message || '')))) return 'cancelled';
+          throw err;
+        });
         try {
-          await page.render({ canvasContext: ctx, viewport }).promise;
+          await Promise.race([
+            finished,
+            new Promise((_, reject) => {
+              renderTimer = setTimeout(() => {
+                stopRender();
+                reject(new Error('Rendering this page is taking too long. The book already on this device was not removed.'));
+              }, 45000);
+            })
+          ]);
         } catch (e) {
+          if (signal && signal.aborted) throw abortError();
+          if (e && /taking too long/i.test(e.message || '')) throw e;
           ctx.fillStyle = '#f4efe2';
           ctx.fillRect(0, 0, canvas.width, canvas.height);
+        } finally {
+          clearTimeout(renderTimer);
+          if (signal) signal.removeEventListener('abort', stopRender);
         }
         let items = [];
         try {

@@ -170,6 +170,10 @@ try {
   if (!marks.includes('Copper bell')) await fail('bookmark label missing before reload');
   await shot('bookmarks.png');
 
+  await page.evaluate(async () => {
+    const blob = new Blob([new Uint8Array([255, 216, 255, 217])], { type: 'image/jpeg' });
+    await BookDB.putPage({ bookId: 'orphan-left-behind', index: 0, image: blob, thumb: blob });
+  });
   await page.reload({ waitUntil: 'domcontentloaded' });
   await page.waitForSelector('body.reading', { timeout: 20000 });
   await page.waitForFunction(() => {
@@ -180,6 +184,10 @@ try {
   const marksAfter = await page.evaluate(() => window.__flipbook.bookmarks.map((mark) => mark.label));
   console.log('bookmarks after reload', marksAfter);
   if (!marksAfter.includes('Copper bell')) await fail('bookmark did not survive reload');
+  await page.waitForFunction(async () => {
+    const row = await BookDB.getPage('orphan-left-behind', 0);
+    return !row;
+  }, null, { timeout: 10000 });
   await shot('resumed.png');
 
   await page.click('#btnLibrary');

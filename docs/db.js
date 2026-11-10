@@ -182,6 +182,41 @@
     return row ? row.blob : null;
   }
 
+  // Delete by primary key, then continue. cursor.delete() plus continue() in the
+  // same turn never finishes on some browsers, which locks the database.
+  // A key cursor avoids reading every page image while the store is locked.
+  function wipeIndex(store, indexName, id) {
+    const index = store.index(indexName);
+    const request = typeof index.openKeyCursor === 'function'
+      ? index.openKeyCursor(IDBKeyRange.only(id))
+      : index.openCursor(IDBKeyRange.only(id));
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) return;
+      store.delete(cursor.primaryKey);
+      cursor.continue();
+    };
+  }
+
+  function dropOrphans(store, ids, keyOnly) {
+    const request = keyOnly && typeof store.openKeyCursor === 'function'
+      ? store.openKeyCursor()
+      : store.openCursor();
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) return;
+      let bookId = null;
+      if (keyOnly) {
+        const key = cursor.primaryKey;
+        bookId = Array.isArray(key) ? key[0] : key;
+      } else if (cursor.value && cursor.value.bookId) {
+        bookId = cursor.value.bookId;
+      }
+      if (bookId && !ids.has(bookId)) store.delete(cursor.primaryKey);
+      cursor.continue();
+    };
+  }
+
   async function deleteBook(id) {
     const db = await open();
     await txDone(db, ['books', 'pages', 'texts', 'pdfs', 'covers', 'outlines', 'chapters', 'annotations'], 'readwrite', (stores) => {
@@ -189,19 +224,10 @@
       stores.pdfs.delete(id);
       stores.covers.delete(id);
       stores.outlines.delete(id);
-      const wipe = (index) => {
-        const cursor = index.openCursor(IDBKeyRange.only(id));
-        cursor.onsuccess = () => {
-          const row = cursor.result;
-          if (!row) return;
-          row.delete();
-          row.continue();
-        };
-      };
-      wipe(stores.pages.index('byBook'));
-      wipe(stores.texts.index('byBook'));
-      wipe(stores.chapters.index('byBook'));
-      wipe(stores.annotations.index('byBook'));
+      wipeIndex(stores.pages, 'byBook', id);
+      wipeIndex(stores.texts, 'byBook', id);
+      wipeIndex(stores.chapters, 'byBook', id);
+      wipeIndex(stores.annotations, 'byBook', id);
     });
     queues.delete(id);
   }
@@ -211,15 +237,11 @@
     const ids = new Set(books.map((book) => book.id));
     const db = await open();
     await txDone(db, ['pages', 'texts', 'pdfs', 'covers', 'outlines', 'chapters', 'annotations'], 'readwrite', (stores) => {
-      ['pages', 'texts', 'pdfs', 'covers', 'outlines', 'chapters', 'annotations'].forEach((name) => {
-        const cursor = stores[name].openCursor();
-        cursor.onsuccess = () => {
-          const row = cursor.result;
-          if (!row) return;
-          const bookId = row.value && row.value.bookId ? row.value.bookId : row.key;
-          if (!ids.has(bookId)) row.delete();
-          row.continue();
-        };
+      ['pages', 'texts', 'pdfs', 'covers', 'outlines'].forEach((name) => {
+        dropOrphans(stores[name], ids, true);
+      });
+      ['chapters', 'annotations'].forEach((name) => {
+        dropOrphans(stores[name], ids, false);
       });
     });
   }

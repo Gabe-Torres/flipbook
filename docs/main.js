@@ -248,14 +248,6 @@
       const img = document.createElement('img');
       img.className = 'cover';
       img.alt = '';
-      try {
-        const cover = await BookDB.getCover(book.id);
-        if (cover) {
-          const url = URL.createObjectURL(cover);
-          coverUrls.push(url);
-          img.src = url;
-        }
-      } catch (e) {}
       const meta = document.createElement('div');
       meta.className = 'meta';
       const heading = document.createElement('h3');
@@ -287,7 +279,17 @@
         if (e.target.closest('button, input')) return;
         openBook(book.id);
       });
+      // Title goes up before the cover read. A cleanup lock on covers must not
+      // leave the shelf looking empty.
       list.appendChild(card);
+      try {
+        const cover = await BookDB.getCover(book.id);
+        if (cover) {
+          const url = URL.createObjectURL(cover);
+          coverUrls.push(url);
+          img.src = url;
+        }
+      } catch (e) {}
     }
     await refreshStorageLabels();
   }
@@ -524,12 +526,14 @@
     rememberPersist();
     try {
       await BookDB.open();
-      await BookDB.vacuum();
     } catch (err) {
       console.error(err);
       toast('This browser blocked local storage, so books can’t be saved here.');
       return;
     }
+    // A stuck cleanup used to run before the shelf loaded, so saved books looked
+    // deleted and the next import waited forever on "Rendering pages".
+    // Draw the saved book first, then drop orphan pages.
     const params = new URLSearchParams((location.hash || '').replace(/^#/, ''));
     const id = params.get('b');
     let explicit = null;
@@ -541,10 +545,12 @@
       const book = await BookDB.getBook(id);
       if (book) {
         await openBook(id, explicit);
+        BookDB.vacuum().catch((err) => console.error(err));
         return;
       }
     }
     await refreshLibrary();
+    BookDB.vacuum().catch((err) => console.error(err));
   }
 
   window.FlipbookApp = { openBook, showLibrary, importFiles, refreshLibrary };
