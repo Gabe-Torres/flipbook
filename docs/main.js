@@ -21,7 +21,12 @@
   }
 
   function isPdf(file) {
-    return !!(file && (file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '')));
+    if (!file) return false;
+    const type = String(file.type || '').toLowerCase();
+    if (type === 'application/pdf' || type === 'application/x-pdf') return true;
+    if (/\.pdf$/i.test(file.name || '')) return true;
+    // Safari often reports a chosen PDF with a blank type.
+    return !type || type === 'application/octet-stream';
   }
 
   function setPill(cls, text) {
@@ -475,11 +480,12 @@
         try { localStorage.setItem('flipbook.splitWide', splitBox.checked ? '1' : '0'); } catch (e) {}
       });
     }
-    $('#pickFile').addEventListener('click', () => $('#fileInput').click());
     $('#fileInput').addEventListener('change', () => {
       const files = [...$('#fileInput').files];
-      $('#fileInput').value = '';
-      if (files.length) importFiles(files);
+      if (!files.length) return;
+      // Clear the input only after the read. Safari drops the file if the
+      // input is reset first, so the choice looks like it never uploaded.
+      importFiles(files).finally(() => { $('#fileInput').value = ''; });
     });
     const zone = $('#dropzone');
     window.addEventListener('dragenter', (event) => {

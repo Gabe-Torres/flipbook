@@ -94,7 +94,7 @@ body.sb #stage{left:calc(170px + var(--sal))}
 .sheetbody button,.dlgcard button{height:40px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);padding:0 14px}
 .sheetbody button:hover{border-color:var(--accent)}
 button.wide,a.wide{width:100%;height:44px}
-button.primary{background:var(--accent-fill)!important;color:var(--accent-ink);font-weight:700;border-color:var(--accent-fill)!important}
+button.primary,label.primary{background:var(--accent-fill)!important;color:var(--accent-ink);font-weight:700;border-color:var(--accent-fill)!important}
 button.danger{color:var(--danger)}
 .seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
 .seg button{flex:1;border:none!important;border-radius:0!important;background:transparent;color:var(--text)}
@@ -175,7 +175,9 @@ button:disabled,input:disabled{opacity:.45;cursor:not-allowed}
 button:disabled:hover{border-color:var(--line);color:inherit}
 .textbtn{background:var(--panel2);border:1px solid var(--line);border-radius:8px;height:34px;padding:0 10px}
 .textbtn:hover{border-color:var(--accent);color:var(--accent)}
-button.primary{background:var(--accent-fill);color:var(--accent-ink);font-weight:700;border:1px solid var(--accent-fill);border-radius:10px;height:44px;padding:0 18px}
+button.primary,label.primary{background:var(--accent-fill);color:var(--accent-ink);font-weight:700;border:1px solid var(--accent-fill);border-radius:10px;height:44px;padding:0 18px}
+label.filepick{position:relative;display:inline-flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer}
+label.filepick input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:16px}
 #library{max-width:880px;margin:0 auto;padding:calc(22px + var(--sat)) calc(18px + var(--sar)) calc(32px + var(--sab)) calc(18px + var(--sal))}
 .libhead{display:flex;align-items:center;gap:12px;margin-bottom:18px}
 .libhead img{border-radius:10px;flex:none}
