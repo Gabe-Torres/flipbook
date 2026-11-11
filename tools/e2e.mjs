@@ -184,6 +184,7 @@ try {
   const marksAfter = await page.evaluate(() => window.__flipbook.bookmarks.map((mark) => mark.label));
   console.log('bookmarks after reload', marksAfter);
   if (!marksAfter.includes('Copper bell')) await fail('bookmark did not survive reload');
+  await page.evaluate(() => BookDB.vacuum());
   await page.waitForFunction(async () => {
     const row = await BookDB.getPage('orphan-left-behind', 0);
     return !row;

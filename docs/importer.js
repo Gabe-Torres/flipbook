@@ -15,39 +15,23 @@
   function toBlob(canvas, type, quality) {
     return new Promise((resolve, reject) => {
       let settled = false;
-      let timer = 0;
       const finish = (err, blob) => {
         if (settled) return;
         settled = true;
-        if (timer) clearTimeout(timer);
+        clearTimeout(timer);
         if (err) reject(err);
         else resolve(blob);
       };
-      const fromDataUrl = () => {
-        const url = canvas.toDataURL(type, quality);
-        const comma = url.indexOf(',');
-        if (comma < 0) throw new Error('Could not encode a page image');
-        const raw = atob(url.slice(comma + 1));
-        const bytes = new Uint8Array(raw.length);
-        for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-        return new Blob([bytes], { type });
-      };
-      // Safari sometimes never calls the toBlob callback.
-      timer = setTimeout(() => {
-        try { finish(null, fromDataUrl()); }
-        catch (err) { finish(err); }
-      }, 8000);
+      const timer = setTimeout(() => {
+        finish(new Error('Saving this page is taking too long. The book already on this device was not removed.'));
+      }, 20000);
       try {
         canvas.toBlob((blob) => {
           if (blob) finish(null, blob);
-          else {
-            try { finish(null, fromDataUrl()); }
-            catch (err) { finish(err); }
-          }
+          else finish(new Error('Could not encode a page image'));
         }, type, quality);
       } catch (err) {
-        try { finish(null, fromDataUrl()); }
-        catch (e) { finish(err); }
+        finish(err);
       }
     });
   }
@@ -228,8 +212,6 @@
         cMapUrl: asset('vendor/pdfjs/cmaps/'),
         cMapPacked: true,
         standardFontDataUrl: asset('vendor/pdfjs/standard_fonts/'),
-        // Safari's OffscreenCanvas path can leave page.render unresolved.
-        isOffscreenCanvasSupported: !appleWebKitBrowser()
       });
       if (signal) signal.addEventListener('abort', () => { try { task.destroy(); } catch (e) {} }, { once: true });
       try {
@@ -284,6 +266,7 @@
       }
       for (let i = 1; i <= n; i++) {
         if (signal && signal.aborted) throw abortError();
+        await new Promise((resolve) => setTimeout(resolve, 0));
         const page = await withTimeout(pdf.getPage(i), 20000, 'Opening this page is taking too long. The book already on this device was not removed.');
         const base = page.getViewport({ scale: 1 });
         const spread = splitWide && isSpread(base.width, base.height);
@@ -300,13 +283,16 @@
           sized = true;
         }
         const basis = spread ? base.width / 2 : base.width;
-        let scale = 1500 / (basis || 1500);
-        if ((base.height || 1) * scale > 2100) scale = 2100 / base.height;
-        scale = Math.min(2.4, Math.max(0.85, scale));
+        const target = appleWebKitBrowser() ? 1100 : 1500;
+        const maxScale = appleWebKitBrowser() ? 1.7 : 2.4;
+        let scale = target / (basis || target);
+        if ((base.height || 1) * scale > 1600 && appleWebKitBrowser()) scale = 1600 / base.height;
+        else if ((base.height || 1) * scale > 2100) scale = 2100 / base.height;
+        scale = Math.min(maxScale, Math.max(0.85, scale));
         const viewport = page.getViewport({ scale });
         canvas.width = Math.max(1, Math.ceil(viewport.width));
         canvas.height = Math.max(1, Math.ceil(viewport.height));
-        const ctx = canvas.getContext('2d', appleWebKitBrowser() ? { willReadFrequently: true } : { alpha: false });
+        const ctx = canvas.getContext('2d', { alpha: false });
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         const rendered = page.render({ canvasContext: ctx, viewport });

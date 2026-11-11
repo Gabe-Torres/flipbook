@@ -7,6 +7,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DOCS = ROOT / 'docs'
 SKIP = {'sw.js', 'app-version.js'}
+# These are fetched the first time they are needed and then cached. Precaching
+# them makes Safari spend a long time on install, then stall the next page load.
+LAZY = (
+    'vendor/tesseract/tesseract-core',
+    'vendor/tesseract/tessdata/',
+    'vendor/pdfjs/cmaps/',
+)
 
 
 def listed():
@@ -41,7 +48,10 @@ def main():
         }) + ';\n',
         encoding='utf-8',
     )
-    shell = ['./', 'index.html', 'app-version.js'] + [rel for rel in rels if rel != 'index.html']
+    shell = ['./', 'index.html', 'app-version.js'] + [
+        rel for rel in rels
+        if rel != 'index.html' and not rel.startswith(LAZY)
+    ]
     template = (ROOT / 'tools' / 'sw.template.js').read_text(encoding='utf-8')
     sw = template.replace('__VERSION__', version).replace('__SHELL__', json.dumps(shell))
     (DOCS / 'sw.js').write_text(sw, encoding='utf-8')

@@ -36,30 +36,21 @@ self.addEventListener('fetch', (event) => {
   const rel = url.pathname.slice(scopePath.length);
   if (rel === 'sw.js') return;
 
-  if (req.mode === 'navigate' || rel === '' || rel === 'index.html') {
-    event.respondWith((async () => {
-      const cache = await caches.open(SHELL_CACHE);
+  event.respondWith((async () => {
+    const cache = await caches.open(SHELL_CACHE);
+    if (req.mode === 'navigate' || rel === '' || rel === 'index.html') {
       return (await cache.match('index.html'))
         || (await cache.match('./'))
-        || (await caches.match(req, { ignoreSearch: true }))
         || fetch(req);
-    })());
-    return;
-  }
-
-  event.respondWith((async () => {
-    const hit = await caches.match(req, { ignoreSearch: true });
+    }
+    const hit = await cache.match(req, { ignoreSearch: true });
     if (hit) return hit;
     try {
       const res = await fetch(req);
-      if (res && res.ok && res.type === 'basic') {
-        const cache = await caches.open(SHELL_CACHE);
-        cache.put(req, res.clone());
-      }
+      if (res && res.ok && res.type === 'basic') cache.put(req, res.clone());
       return res;
     } catch (err) {
       if (req.destination === 'document') {
-        const cache = await caches.open(SHELL_CACHE);
         return (await cache.match('index.html')) || (await cache.match('./')) || Response.error();
       }
       return Response.error();

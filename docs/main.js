@@ -439,10 +439,8 @@
     let hadController = !!navigator.serviceWorker.controller;
     let refreshing = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (hadController && !refreshing && !currentAbort) {
-        refreshing = true;
-        location.reload();
-        return;
+      if (hadController && !refreshing) {
+        toast('Update available', 'Reload', () => { refreshing = true; location.reload(); }, 20000);
       }
       hadController = true;
     });
@@ -536,9 +534,9 @@
       toast('This browser blocked local storage, so books can’t be saved here.');
       return;
     }
-    // A stuck cleanup used to run before the shelf loaded, so saved books looked
-    // deleted and the next import waited forever on "Rendering pages".
-    // Draw the saved book first, then drop orphan pages.
+    // Cleanup holds the page store. On Safari that scan of a saved book is slow,
+    // so running it at startup made the site sit there and the next import wait
+    // on "Rendering pages". The shelf and the open book come first.
     const params = new URLSearchParams((location.hash || '').replace(/^#/, ''));
     const id = params.get('b');
     let explicit = null;
@@ -550,12 +548,19 @@
       const book = await BookDB.getBook(id);
       if (book) {
         await openBook(id, explicit);
-        BookDB.vacuum().catch((err) => console.error(err));
+        scheduleVacuum();
         return;
       }
     }
     await refreshLibrary();
-    BookDB.vacuum().catch((err) => console.error(err));
+    scheduleVacuum();
+  }
+
+  function scheduleVacuum() {
+    setTimeout(() => {
+      if (currentAbort) return;
+      BookDB.vacuum().catch((err) => console.error(err));
+    }, 120000);
   }
 
   window.FlipbookApp = { openBook, showLibrary, importFiles, refreshLibrary };
