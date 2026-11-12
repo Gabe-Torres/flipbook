@@ -309,7 +309,10 @@
   function showProgress(progress) {
     const titles = { read: 'Opening PDF', render: 'Rendering pages', save: 'Saving on this device', ocr: 'Recognizing text' };
     $('#impTitle').textContent = titles[progress.phase] || 'Working';
-    $('#impStatus').textContent = progress.detail || '';
+    const statusText = $('#impStatusText');
+    const detail = String(progress.detail || '').replace(/(?:\u2026|\.{1,3})\s*$/, '');
+    if (statusText) statusText.textContent = detail;
+    else $('#impStatus').textContent = detail;
     let fraction = 0.08;
     if (progress.total) fraction = Math.max(0.08, progress.current / progress.total);
     else if (typeof progress.fraction === 'number') fraction = Math.max(0.08, progress.fraction);
