@@ -1,7 +1,7 @@
 /* Cursor companions — original canvas drawings.
    pointer-events:none overlay; follows the mouse with a spring.
-   Hidden on touch-only devices. N cycles Fairy, Glow, and Off. Saved in localStorage.
-   Respects prefers-reduced-motion. */
+   Hidden on touch-only devices. Starts off. N cycles Fairy, Glow, and Off.
+   Saved in localStorage. Respects prefers-reduced-motion. */
 (() => {
   'use strict';
   const KEY = 'flipbook.fairy';
@@ -10,7 +10,8 @@
     let raw = {};
     try { raw = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (e) {}
     let cursor = raw.cursor;
-    if (!CURSORS.includes(cursor)) cursor = raw.on === false ? 'off' : 'fairy';
+    // A missing or old value stays off. An explicit fairy or glow choice is kept.
+    if (!CURSORS.includes(cursor)) cursor = 'off';
     return { cursor, sound: !!raw.sound };
   };
   const cfg = load();
