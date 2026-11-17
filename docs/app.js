@@ -25,6 +25,7 @@
 
   function toast(msg, action, fn, ms = 2600) {
     const t = $('#toast'); if (!t) return;
+    toast._hint = false;
     $('.msg', t).textContent = msg;
     const a = $('.act', t);
     if (action) { a.textContent = action; a.classList.remove('hidden'); a.onclick = () => { t.classList.add('hidden'); fn(); }; }
@@ -33,6 +34,43 @@
     clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.add('hidden'), ms);
   }
   window.FlipbookToast = toast;
+
+  // Hover or keyboard focus on a control names its shortcut, then the note closes itself.
+  // A status message that is already on screen stays put.
+  let hintTimer = 0;
+  function showHint(key) {
+    const msg = 'Press ' + key;
+    const t = $('#toast');
+    if (!t || !key) return;
+    if (!t.classList.contains('hidden') && !toast._hint) return;
+    if (toast._hint && !t.classList.contains('hidden') && $('.msg', t).textContent === msg) return;
+    toast(msg, null, null, 2000);
+    toast._hint = true;
+  }
+  function shortcutEl(target) {
+    return target && target.closest ? target.closest('[data-shortcut]') : null;
+  }
+  document.addEventListener('pointerover', (e) => {
+    if (e.pointerType === 'touch' || !matchMedia('(hover: hover)').matches) return;
+    const el = shortcutEl(e.target);
+    if (!el || el.contains(e.relatedTarget)) return;
+    clearTimeout(hintTimer);
+    hintTimer = setTimeout(() => {
+      if (!el.isConnected || (!el.matches(':hover') && document.activeElement !== el)) return;
+      showHint(el.dataset.shortcut);
+    }, 400);
+  });
+  document.addEventListener('pointerout', (e) => {
+    const el = shortcutEl(e.target);
+    if (!el || el.contains(e.relatedTarget)) return;
+    clearTimeout(hintTimer);
+  });
+  document.addEventListener('focusin', (e) => {
+    const el = shortcutEl(e.target);
+    if (!el || !el.matches(':focus-visible')) return;
+    clearTimeout(hintTimer);
+    showHint(el.dataset.shortcut);
+  });
 
   function saveState() {
     if (!SESSION) return;

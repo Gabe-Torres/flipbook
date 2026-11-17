@@ -127,7 +127,28 @@ try {
   await page.waitForTimeout(400);
   await shot('reader_spread.png');
 
+  await page.hover('#btnSidebar');
+  await page.waitForFunction(() => {
+    const toast = document.querySelector('#toast');
+    const msg = document.querySelector('#toast .msg');
+    return toast && !toast.classList.contains('hidden') && msg && msg.textContent === 'Press T';
+  }, null, { timeout: 4000 });
+  await page.mouse.move(8, 8);
+  await page.waitForFunction(() => document.querySelector('#toast').classList.contains('hidden'), null, { timeout: 4000 });
+  await page.evaluate(() => window.FlipbookToast('Pages turn instantly'));
+  await page.hover('#btnNext');
+  await page.waitForTimeout(700);
+  const keptToast = await page.locator('#toast .msg').innerText();
+  if (keptToast !== 'Pages turn instantly') await fail('shortcut note replaced a status message: ' + keptToast);
+  await page.mouse.move(8, 8);
+  await page.evaluate(() => document.querySelector('#toast').classList.add('hidden'));
+
   await page.click('[data-open="menu"]');
+  await page.hover('#animSeg');
+  await page.waitForFunction(() => {
+    const msg = document.querySelector('#toast .msg');
+    return msg && msg.textContent === 'Press A';
+  }, null, { timeout: 4000 });
   await page.click('#animSeg [data-anim="off"]');
   const jumped = await page.evaluate(() => {
     const from = window.__flipbook.current;
