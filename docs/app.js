@@ -199,6 +199,7 @@
     state.page = i;
     saveState();
     updateBmToggle();
+    renderProgress();
   }
   let turningBack = false;
   function curls() {
@@ -939,6 +940,131 @@
     renderMarkMode();
     if (annoMode !== 'read') closeSheet('notes');
   }
+  // Top-level outline entries, or the first level that names a page. Chapters added here get a tick too.
+  function firstMarkedPage(node) {
+    if (!node) return null;
+    if (Number.isInteger(node.page) && node.page >= 0) return node.page;
+    for (const child of node.items || []) {
+      const page = firstMarkedPage(child);
+      if (page != null) return page;
+    }
+    return null;
+  }
+  function chapterMarks() {
+    const marks = [];
+    const seen = new Set();
+    const add = (page, title) => {
+      if (!Number.isInteger(page) || page < 0 || page >= N || seen.has(page)) return;
+      seen.add(page);
+      const name = String(title || 'Chapter').replace(/\s+/g, ' ').trim() || 'Chapter';
+      marks.push({ page, title: name });
+    };
+    let level = Array.isArray(outline) ? outline : [];
+    for (let depth = 0; depth < 8 && level.length; depth++) {
+      const found = [];
+      for (const node of level) {
+        const page = firstMarkedPage(node);
+        if (page != null) found.push({ page, title: node.title });
+      }
+      if (found.length) {
+        found.forEach((mark) => add(mark.page, mark.title));
+        break;
+      }
+      level = level.flatMap((node) => node.items || []);
+    }
+    for (const ch of chapters) add(ch.page, ch.title);
+    marks.sort((a, b) => a.page - b.page);
+    return marks;
+  }
+  function progressRatio(page) {
+    if (N <= 1) return page > 0 ? 1 : 0;
+    return Math.max(0, Math.min(1, page / (N - 1)));
+  }
+  function pageFromProgressX(clientX) {
+    const track = $('#progressTrack');
+    if (!track || N <= 1) return 0;
+    const rect = track.getBoundingClientRect();
+    const t = Math.min(1, Math.max(0, (clientX - rect.left) / (rect.width || 1)));
+    return Math.round(t * (N - 1));
+  }
+  function hideProgressTip() {
+    const tip = $('#progressTip');
+    if (tip) tip.classList.add('hidden');
+  }
+  function showProgressTip(page, clientX) {
+    const tip = $('#progressTip');
+    const host = $('#progress');
+    if (!tip || !host) return;
+    let title = '';
+    for (const mark of chapterMarks()) if (mark.page <= page) title = mark.title;
+    tip.textContent = title ? title + ' · ' + (page + 1) : 'Page ' + (page + 1);
+    tip.classList.remove('hidden');
+    const hostRect = host.getBoundingClientRect();
+    const width = tip.offsetWidth;
+    const x = clientX - hostRect.left - width / 2;
+    tip.style.left = Math.max(0, Math.min(hostRect.width - width, x)) + 'px';
+  }
+  function renderProgress() {
+    const bar = $('#progress');
+    if (!bar) return;
+    const on = !!(SESSION && N > 0);
+    bar.classList.toggle('hidden', !on);
+    if (!on) { hideProgressTip(); return; }
+    const page = Math.max(0, Math.min(N - 1, current));
+    const marks = chapterMarks();
+    let here = '';
+    for (const mark of marks) if (mark.page <= page) here = mark.title;
+    bar.setAttribute('aria-valuemin', '1');
+    bar.setAttribute('aria-valuemax', String(Math.max(1, N)));
+    bar.setAttribute('aria-valuenow', String(page + 1));
+    bar.setAttribute('aria-valuetext', here ? here + ', page ' + (page + 1) + ' of ' + N : 'Page ' + (page + 1) + ' of ' + N);
+    const fill = $('.progress-fill', bar);
+    if (fill) fill.style.width = (progressRatio(page) * 100) + '%';
+    const ticks = $('.progress-ticks', bar);
+    if (!ticks) return;
+    ticks.replaceChildren();
+    for (const mark of marks) {
+      const tick = document.createElement('i');
+      tick.className = 'progress-tick' + (mark.page <= page ? ' seen' : '');
+      tick.style.left = (progressRatio(mark.page) * 100) + '%';
+      tick.dataset.page = String(mark.page);
+      tick.dataset.title = mark.title;
+      ticks.appendChild(tick);
+    }
+  }
+  function bindProgress() {
+    const bar = $('#progress');
+    if (!bar || bar.dataset.bound) return;
+    bar.dataset.bound = '1';
+    let scrubbing = false;
+    const scrub = (e) => {
+      const page = pageFromProgressX(e.clientX);
+      showProgressTip(page, e.clientX);
+      if (page !== current) go(page, false);
+    };
+    bar.addEventListener('pointerdown', (e) => {
+      if (e.button != null && e.button !== 0) return;
+      scrubbing = true;
+      bar.classList.add('scrub');
+      if (bar.setPointerCapture) bar.setPointerCapture(e.pointerId);
+      scrub(e);
+    });
+    bar.addEventListener('pointermove', (e) => {
+      if (e.pointerType === 'touch' && !scrubbing) return;
+      if (scrubbing) scrub(e);
+      else showProgressTip(pageFromProgressX(e.clientX), e.clientX);
+    });
+    const endScrub = () => { scrubbing = false; bar.classList.remove('scrub'); };
+    bar.addEventListener('pointerup', endScrub);
+    bar.addEventListener('pointercancel', endScrub);
+    bar.addEventListener('pointerleave', () => { if (!scrubbing) hideProgressTip(); });
+    bar.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); go(current + 1, false); }
+      else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); e.stopPropagation(); go(current - 1, false); }
+      else if (e.key === 'Home') { e.preventDefault(); e.stopPropagation(); go(0, false); }
+      else if (e.key === 'End') { e.preventDefault(); e.stopPropagation(); go(N - 1, false); }
+    });
+  }
   function renderToc(nodes) {
     const ul = document.createElement('ul');
     ul.className = 'toc';
@@ -1034,6 +1160,7 @@
       chapters.sort((a, b) => a.page - b.page || a.created - b.created);
       chapterEdit = '';
       renderContents();
+      renderProgress();
       toast(existing ? 'Chapter updated.' : 'Chapter added on this device.');
     } catch (err) {
       toast((err && err.message) || 'Could not save that chapter.');
@@ -1044,6 +1171,7 @@
     chapters = chapters.filter((ch) => ch.id !== id);
     if (chapterEdit === id) chapterEdit = '';
     renderContents();
+    renderProgress();
     toast('Chapter removed.');
   }
   function renderNotes() {
@@ -1261,6 +1389,8 @@
     else { $('#sidebar').classList.add('hidden'); document.body.classList.remove('sb'); }
     build(start);
     renderMarkMode();
+    bindProgress();
+    renderProgress();
     await ensureLoaded(start);
     updateBmToggle();
     renderMenu();
@@ -1294,6 +1424,7 @@
     const banner = $('#annoBanner');
     if (banner) banner.classList.add('hidden');
     document.body.classList.remove('annotating');
+    renderProgress();
     const noteBox = $('#noteDialog');
     if (noteBox) noteBox.classList.add('hidden');
   }

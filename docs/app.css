@@ -81,6 +81,17 @@ body.sb #stage{left:calc(170px + var(--sal))}
 .nav{position:absolute;top:50%;transform:translateY(-50%);width:44px;height:88px;border:none;border-radius:10px;background:var(--nav);font-size:40px;color:var(--muted);z-index:5}
 .nav:hover{background:var(--nav-hover);color:var(--accent)}
 .nav.prev{left:10px}.nav.next{right:10px}
+.progress{position:fixed;left:var(--sal);right:var(--sar);bottom:var(--bottom);height:16px;z-index:12;display:flex;align-items:flex-end;touch-action:none;cursor:pointer}
+.progress:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
+.progress-track{position:relative;width:100%;height:3px;background:var(--line)}
+.progress-fill{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--accent);transition:width .15s linear}
+.progress-fill::after{content:"";position:absolute;right:-4px;top:50%;width:8px;height:8px;border-radius:50%;background:var(--accent);transform:translateY(-50%)}
+.progress.scrub .progress-fill{transition:none}
+.progress-ticks{position:absolute;inset:0}
+.progress-tick{position:absolute;top:-5px;width:2px;height:13px;margin-left:-1px;background:var(--muted);opacity:.7;pointer-events:none}
+.progress-tick.seen{background:var(--accent);opacity:1}
+.progress-tip{position:absolute;bottom:14px;max-width:min(240px,70vw);padding:4px 8px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);color:var(--text);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;box-shadow:0 8px 24px var(--shadow)}
+@media (prefers-reduced-motion:reduce){.progress-fill{transition:none}}
 /* sheets & panels */
 .sheet{position:fixed;z-index:40;background:var(--panel);color:var(--text);display:flex;flex-direction:column}
 .sheet.panel{top:var(--top);right:0;bottom:0;width:360px;max-width:100%;border-left:1px solid var(--line);box-shadow:-20px 0 50px var(--shadow)}
@@ -148,7 +159,7 @@ body.phone .bottombar{display:flex;position:fixed;left:0;right:0;bottom:0;height
 .bottombar button:active{background:var(--panel2)}
 .bottombar .bb-num{font-weight:700;color:var(--accent);font-size:17px}
 .bottombar .bm-toggle.on span{color:var(--danger)}
-body.phone #stage{padding:8px 4px}
+body.phone #stage{padding:8px 4px 18px}
 body.phone .nav{display:none}
 body.phone.sb #stage{left:var(--sal)}
 body.phone .sidebar{top:0;width:auto;right:0;bottom:0;z-index:45;padding:0;display:flex;flex-direction:column;background:var(--panel)}

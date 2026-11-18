@@ -97,6 +97,8 @@ try {
   console.log('persist', persist);
   if (!persist || persist === 'error' || persist === 'unsupported') await fail('persist() was not called: ' + persist);
   await shot('library_empty.png');
+  const progressHidden = await page.evaluate(() => document.querySelector('#progress').classList.contains('hidden'));
+  if (!progressHidden) await fail('progress bar showed before a book was open');
 
   const dropped = await page.evaluate(async (b64) => {
     const bin = atob(b64);
@@ -159,6 +161,43 @@ try {
   if (jumped.saved !== '0') await fail('instant page turns were not saved');
   await page.click('#animSeg [data-anim="on"]');
   await page.click('[data-close="menu"]');
+  await page.evaluate(() => window.__flipbook.go(1, false));
+  await page.waitForFunction(() => window.__flipbook.current === 1);
+
+  const progressAt = await page.evaluate(() => {
+    const bar = document.querySelector('#progress');
+    const fill = document.querySelector('.progress-fill');
+    return {
+      hidden: bar.classList.contains('hidden'),
+      now: bar.getAttribute('aria-valuenow'),
+      max: bar.getAttribute('aria-valuemax'),
+      width: fill.style.width
+    };
+  });
+  if (progressAt.hidden || progressAt.now !== '2' || progressAt.max !== '6' || progressAt.width !== '20%') {
+    await fail('progress bar did not match page 2 of 6: ' + JSON.stringify(progressAt));
+  }
+  await page.click('[data-open="contents"]');
+  await page.fill('#chapterTitle', 'The lamp');
+  await page.fill('#chapterPage', '4');
+  await page.click('#chapterSave');
+  await page.waitForFunction(() => {
+    const tick = document.querySelector('.progress-tick');
+    return tick && tick.dataset.title === 'The lamp' && tick.dataset.page === '3';
+  }, null, { timeout: 10000 });
+  const tickBox = await page.locator('.progress-tick').boundingBox();
+  const progressBox = await page.locator('#progress').boundingBox();
+  await page.mouse.move(tickBox.x + tickBox.width / 2, progressBox.y + progressBox.height / 2);
+  await page.waitForFunction(() => {
+    const tip = document.querySelector('#progressTip');
+    return tip && !tip.classList.contains('hidden') && tip.textContent === 'The lamp · 4';
+  }, null, { timeout: 4000 });
+  await page.click('#chapterList .mini.danger');
+  await page.waitForFunction(() => !document.querySelector('.progress-tick'));
+  await page.click('[data-close="contents"]');
+  const track = await page.locator('#progressTrack').boundingBox();
+  await page.mouse.click(track.x + track.width - 1, track.y + track.height / 2);
+  await page.waitForFunction(() => window.__flipbook.current === 5);
   await page.evaluate(() => window.__flipbook.go(1, false));
   await page.waitForFunction(() => window.__flipbook.current === 1);
 

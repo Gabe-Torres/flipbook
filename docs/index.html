@@ -110,6 +110,14 @@
   <button class="nav next" id="navNext" type="button" data-shortcut="→" aria-keyshortcuts="ArrowRight" aria-label="Next page">›</button>
 </main>
 
+<div id="progress" class="progress hidden" role="slider" tabindex="0" aria-label="Reading progress" aria-valuemin="1" aria-valuemax="1" aria-valuenow="1">
+  <div id="progressTip" class="progress-tip hidden" aria-hidden="true"></div>
+  <div id="progressTrack" class="progress-track">
+    <div class="progress-fill"></div>
+    <div class="progress-ticks"></div>
+  </div>
+</div>
+
 <nav class="bottombar">
   <button type="button" data-open="sidebar" data-shortcut="T" aria-keyshortcuts="T" aria-label="Pages"><span>▦</span><small>Pages</small></button>
   <button class="bb-prev" type="button" data-shortcut="←" aria-keyshortcuts="ArrowLeft" aria-label="Previous page"><span>◀</span><small>Prev</small></button>
