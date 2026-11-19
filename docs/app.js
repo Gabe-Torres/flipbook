@@ -401,6 +401,7 @@
     }).catch(() => {});
     $('#zLabel').textContent = `Page ${i + 1}`;
     paintZoomMarks();
+    paintSearchGlows();
   }
   function fitWidth() { const s = $('#zScroll'); return Math.min(s.clientWidth - (phone ? 8 : 40), (s.clientHeight - (phone ? 8 : 40)) / RATIO); }
   function zoomApply() {
@@ -611,11 +612,127 @@
     return (a > 0 ? '… ' : '') + s + (b < text.length ? ' …' : '');
   }
   const count = (nt, t) => { let c = 0, p = 0; while ((p = nt.indexOf(t, p)) >= 0) { c++; p += t.length; } return c; };
-  let lastHits = [], activeIdx = -1;
+  let lastHits = [], activeIdx = -1, activeSpot = -1;
+  let searchTerms = [], searchPhrase = false;
+  let pageRuns = null, runsPromise = null;
   function addRecent(q) {
     q = q.trim(); if (q.length < 2) return;
     recent = [q, ...recent.filter((r) => r.toLowerCase() !== q.toLowerCase())].slice(0, 8);
     saveRecent();
+  }
+  function searchWord(text) {
+    return norm(text).replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
+  }
+  function boxesForPage(page) {
+    const runs = pageRuns && pageRuns[page] || [];
+    if (!runs.length || !searchTerms.length) return [];
+    const words = runs.map((run) => ({ ...run, n: searchWord(run.text) })).filter((run) => run.n);
+    if (searchPhrase) {
+      const phrase = searchTerms[0];
+      const joined = words.map((word) => word.n).join(' ');
+      const picked = new Set();
+      let at = 0;
+      while (phrase && (at = joined.indexOf(phrase, at)) >= 0) {
+        let cursor = 0;
+        for (let i = 0; i < words.length; i++) {
+          const end = cursor + words[i].n.length;
+          if (end > at && cursor < at + phrase.length) picked.add(i);
+          cursor = end + 1;
+        }
+        at += Math.max(1, phrase.length);
+      }
+      return [...picked].sort((a, b) => a - b).map((i) => words[i]);
+    }
+    return words.filter((word) => searchTerms.some((term) => word.n.includes(term)));
+  }
+  function searchSpots() {
+    const spots = [];
+    lastHits.forEach((hit) => {
+      const boxes = pageRuns ? boxesForPage(hit.i) : [];
+      if (!boxes.length) spots.push({ page: hit.i, n: -1 });
+      else boxes.forEach((_, n) => spots.push({ page: hit.i, n }));
+    });
+    return spots;
+  }
+  function paintSearchGlows() {
+    const spot = activeSpot >= 0 ? searchSpots()[activeSpot] : null;
+    $$('#book .page').forEach((pageEl) => {
+      let layer = pageEl.querySelector(':scope > .search-glows');
+      if (!layer) {
+        layer = document.createElement('div');
+        layer.className = 'search-glows';
+        pageEl.appendChild(layer);
+      }
+      const page = +pageEl.dataset.i;
+      const boxes = boxesForPage(page);
+      layer.replaceChildren();
+      boxes.forEach((box, n) => {
+        const glow = document.createElement('i');
+        glow.className = 'search-glow' + (spot && spot.page === page && spot.n === n ? ' current' : '');
+        glow.style.left = (box.x * 100) + '%';
+        glow.style.top = (box.y * 100) + '%';
+        glow.style.width = (box.w * 100) + '%';
+        glow.style.height = (box.h * 100) + '%';
+        layer.appendChild(glow);
+      });
+    });
+    const zoomLayer = $('#zSearch');
+    if (zoomLayer) {
+      zoomLayer.replaceChildren();
+      if (zoomOpen()) {
+        boxesForPage(zPage).forEach((box, n) => {
+          const glow = document.createElement('i');
+          glow.className = 'search-glow' + (spot && spot.page === zPage && spot.n === n ? ' current' : '');
+          glow.style.left = (box.x * 100) + '%';
+          glow.style.top = (box.y * 100) + '%';
+          glow.style.width = (box.w * 100) + '%';
+          glow.style.height = (box.h * 100) + '%';
+          zoomLayer.appendChild(glow);
+        });
+      }
+    }
+  }
+  function revealGlow(spot) {
+    if (!spot || spot.n < 0 || !zoomOpen()) return;
+    const boxes = boxesForPage(spot.page);
+    const box = boxes[spot.n];
+    if (!box) return;
+    if (zPage !== spot.page) { zPage = spot.page; zoomShow(); }
+    requestAnimationFrame(() => {
+      const scroll = $('#zScroll');
+      const frame = $('#zFrame');
+      if (!scroll || !frame) return;
+      scroll.scrollLeft = box.x * frame.clientWidth + box.w * frame.clientWidth / 2 - scroll.clientWidth / 2;
+      scroll.scrollTop = box.y * frame.clientHeight + box.h * frame.clientHeight / 2 - scroll.clientHeight / 2;
+    });
+  }
+  function ensureRuns() {
+    if (pageRuns || !SESSION || !SESSION.loadRuns) return Promise.resolve(pageRuns);
+    if (!runsPromise) {
+      const myEpoch = epoch;
+      runsPromise = SESSION.loadRuns().then((runs) => {
+        if (myEpoch !== epoch) return pageRuns;
+        pageRuns = Array.isArray(runs) ? runs : [];
+        if (searchTerms.length) paintSearchGlows();
+        return pageRuns;
+      }).catch(() => {
+        if (myEpoch === epoch) pageRuns = [];
+        return pageRuns;
+      });
+    }
+    return runsPromise;
+  }
+  function stepSearch(delta) {
+    const spots = searchSpots();
+    if (!spots.length) return;
+    let idx = activeSpot;
+    if (idx < 0 || idx >= spots.length) idx = delta > 0 ? -1 : 0;
+    activeSpot = (idx + delta + spots.length) % spots.length;
+    const spot = spots[activeSpot];
+    setActive(lastHits.findIndex((hit) => hit.i === spot.page));
+    if (spot.page !== current) go(spot.page, false);
+    paintSearchGlows();
+    revealGlow(spot);
   }
   function renderSearch(q) {
     const box = $('#searchResults');
@@ -623,6 +740,10 @@
     q = (q || '').trim();
     if (q.length < 2) {
       lastHits = [];
+      searchTerms = [];
+      searchPhrase = false;
+      activeSpot = -1;
+      paintSearchGlows();
       if (recent.length) {
         box.innerHTML = `<div class="meta"><span>Recent searches</span><button class="clr" type="button">Clear</button></div>` + recent.map((r) => `<div class="recent" data-q="${esc(r)}">${esc(r)}</div>`).join('');
         $('.clr', box).onclick = (e) => { e.stopPropagation(); recent = []; saveRecent(); renderSearch(''); };
@@ -633,9 +754,12 @@
     }
     const phrase = /^".*"$/.test(q);
     const terms = phrase ? [norm(q.slice(1, -1))] : norm(q).split(/\s+/).filter(Boolean);
+    searchPhrase = phrase;
+    searchTerms = terms.map((term) => term.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '')).filter(Boolean);
     const hits = [];
     for (let i = 0; i < N; i++) { const nt = NORM[i] || ''; if (terms.every((t) => nt.includes(t))) hits.push({ i, score: terms.reduce((s, t) => s + count(nt, t), 0) }); }
-    lastHits = hits; activeIdx = -1;
+    lastHits = hits; activeIdx = -1; activeSpot = -1;
+    ensureRuns();
     hits.forEach((h) => { const th = $(`.thumb[data-i="${h.i}"]`); if (th) th.classList.add('hit'); });
     const total = hits.reduce((s, h) => s + h.score, 0);
     const myEpoch = epoch;
@@ -645,8 +769,9 @@
     $$('.result', box).forEach((r) => {
       const i = +r.dataset.i;
       SESSION.getThumbUrl(i).then((url) => { if (myEpoch === epoch && url) r.querySelector('img').src = url; }).catch(() => {});
-      r.onclick = (e) => { e.stopPropagation(); addRecent(q); setActive(+r.dataset.k); go(+r.dataset.i); if (phone) closeSheet('search'); };
+      r.onclick = (e) => { e.stopPropagation(); addRecent(q); setActive(+r.dataset.k); const spot = searchSpots().findIndex((item) => item.page === +r.dataset.i); activeSpot = spot; go(+r.dataset.i); paintSearchGlows(); if (phone) closeSheet('search'); };
     });
+    paintSearchGlows();
   }
   function setActive(k) {
     activeIdx = k; $$('.result').forEach((r) => r.classList.toggle('active', +r.dataset.k === k));
@@ -806,8 +931,7 @@
     si.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         if (!lastHits.length) return; e.preventDefault(); addRecent(si.value);
-        const k = e.key === 'ArrowUp' ? (activeIdx - 1 + lastHits.length) % lastHits.length : (activeIdx + 1) % lastHits.length;
-        setActive(k); go(lastHits[k].i, false);
+        stepSearch(e.key === 'ArrowUp' ? -1 : 1);
         if (phone && e.key === 'Enter') { si.blur(); closeSheet('search'); }
       } else if (e.key === 'Escape') { if (phone) closeSheet('search'); else { si.value = ''; renderSearch(''); $('#searchResults').classList.add('hidden'); si.blur(); } }
     });
@@ -830,6 +954,7 @@
         case 'Home': go(0, false); break;
         case 'End': go(N - 1, false); break;
         case '/': e.preventDefault(); openSheet('search'); break;
+        case 'Enter': if (lastHits.length) { e.preventDefault(); stepSearch(1); } break;
         case 'z': case 'Z': zoomOpenAt(visiblePages()[0]); break;
         case 't': case 'T': setSidebar($('#sidebar').classList.contains('hidden')); break;
         case 'f': case 'F': $('#btnFull').click(); break;
@@ -906,6 +1031,7 @@
       fillLayer(layer, +page.dataset.i);
     });
     paintZoomMarks();
+    paintSearchGlows();
   }
   function paintZoomMarks() {
     fillLayer($('#zMarks'), zPage);
@@ -1424,6 +1550,12 @@
     const banner = $('#annoBanner');
     if (banner) banner.classList.add('hidden');
     document.body.classList.remove('annotating');
+    pageRuns = null;
+    runsPromise = null;
+    searchTerms = [];
+    lastHits = [];
+    activeSpot = -1;
+    paintSearchGlows();
     renderProgress();
     const noteBox = $('#noteDialog');
     if (noteBox) noteBox.classList.add('hidden');
@@ -1433,6 +1565,8 @@
     if (!SESSION) return;
     const page = current;
     applyTexts(texts);
+    pageRuns = null;
+    runsPromise = null;
     if ($('#searchInput').value.trim().length >= 2) renderSearch($('#searchInput').value);
     publishDebug();
     current = page;

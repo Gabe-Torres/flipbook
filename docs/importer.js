@@ -152,6 +152,53 @@
     return ratio >= 1.28 && half >= 0.58 && half <= 0.86;
   }
 
+  function clampBox(x, y, w, h) {
+    const left = Math.max(0, Math.min(1, x));
+    const top = Math.max(0, Math.min(1, y));
+    const right = Math.max(left, Math.min(1, x + w));
+    const bottom = Math.max(top, Math.min(1, y + h));
+    return { x: left, y: top, w: right - left, h: bottom - top };
+  }
+
+  function itemBox(viewport, item, side) {
+    const Util = pdfjsLib.Util;
+    const tx = Util && Util.transform
+      ? Util.transform(viewport.transform, item.transform)
+      : null;
+    const fontHeight = tx ? Math.max(1, Math.hypot(tx[2], tx[3])) : 12;
+    let x = tx ? tx[4] : 0;
+    let y = tx ? tx[5] - fontHeight : 0;
+    let w = Math.max(1, (item.width || 0) * (viewport.scale || 1));
+    let h = fontHeight;
+    const fullW = viewport.width || 1;
+    const fullH = viewport.height || 1;
+    if (side === 'left' || side === 'right') {
+      const mid = fullW / 2;
+      if (side === 'right') x -= mid;
+      return clampBox(x / mid, y / fullH, w / mid, h / fullH);
+    }
+    return clampBox(x / fullW, y / fullH, w / fullW, h / fullH);
+  }
+
+  function runsFromItems(items, viewport, side) {
+    const runs = [];
+    (items || []).forEach((item) => {
+      const str = item && item.str || '';
+      if (!str.trim()) return;
+      const box = itemBox(viewport, item, side);
+      const re = /\S+/g;
+      let match;
+      while ((match = re.exec(str))) {
+        const word = match[0];
+        const start = match.index / str.length;
+        const width = word.length / str.length;
+        const piece = clampBox(box.x + box.w * start, box.y, box.w * width, box.h);
+        if (piece.w > 0.001 && piece.h > 0.001) runs.push({ text: word, ...piece });
+      }
+    });
+    return runs;
+  }
+
   function splitItems(items, viewport) {
     const left = [];
     const right = [];
@@ -240,7 +287,7 @@
       let splitSheets = 0;
       const texts = [];
       const pageMap = [];
-      async function storeLeaf(source, text) {
+      async function storeLeaf(source, text, runs) {
         const image = await toBlob(source, 'image/jpeg', 0.86);
         const tw = 200;
         const th = Math.max(1, Math.round(source.height * (tw / source.width)));
@@ -261,7 +308,7 @@
           detail: `Saving page ${leaf + 1} on this device`
         });
         await BookDB.putPage({ bookId: id, index: leaf, image, thumb: thumbBlob });
-        await BookDB.putText(id, leaf, text || '');
+        await BookDB.putText(id, leaf, text || '', runs || []);
         leaf += 1;
       }
       for (let i = 1; i <= n; i++) {
@@ -332,10 +379,10 @@
         if (spread) {
           const mid = Math.round(canvas.width / 2);
           const halves = splitItems(items, viewport);
-          await storeLeaf(sliceCanvas(canvas, 0, mid), itemsToText(halves[0]));
-          await storeLeaf(sliceCanvas(canvas, mid, canvas.width - mid), itemsToText(halves[1]));
+          await storeLeaf(sliceCanvas(canvas, 0, mid), itemsToText(halves[0]), runsFromItems(halves[0], viewport, 'left'));
+          await storeLeaf(sliceCanvas(canvas, mid, canvas.width - mid), itemsToText(halves[1]), runsFromItems(halves[1], viewport, 'right'));
         } else {
-          await storeLeaf(canvas, itemsToText(items));
+          await storeLeaf(canvas, itemsToText(items), runsFromItems(items, viewport, null));
         }
         try { page.cleanup(); } catch (e) {}
       }
@@ -427,8 +474,26 @@
         const record = await BookDB.getPage(bookId, i);
         if (!record || !record.image) continue;
         const result = await worker.recognize(record.image);
-        const text = (result && result.data && result.data.text ? result.data.text : '').trim();
-        await BookDB.putText(bookId, i, text);
+        const data = result && result.data || {};
+        const text = (data.text || '').trim();
+        let runs = [];
+        try {
+          const bmp = await createImageBitmap(record.image);
+          const width = bmp.width || 1;
+          const height = bmp.height || 1;
+          bmp.close();
+          runs = (data.words || []).map((word) => {
+            const box = word && word.bbox || {};
+            return {
+              text: word && word.text || '',
+              x: (box.x0 || 0) / width,
+              y: (box.y0 || 0) / height,
+              w: ((box.x1 || 0) - (box.x0 || 0)) / width,
+              h: ((box.y1 || 0) - (box.y0 || 0)) / height
+            };
+          });
+        } catch (e) {}
+        await BookDB.putText(bookId, i, text, runs);
       }
       const texts = await BookDB.getTexts(bookId);
       await BookDB.patchBook(bookId, {
@@ -441,5 +506,42 @@
     }
   }
 
-  window.PdfImport = { importFile, ocrBook, textIsSparse, asset, outlineFromBlob, readOutline, isSpread };
+  async function textRunsFromBlob(blob, pageCount) {
+    if (!blob) return [];
+    configurePdf();
+    const data = await blob.arrayBuffer();
+    const task = pdfjsLib.getDocument({
+      data,
+      cMapUrl: asset('vendor/pdfjs/cmaps/'),
+      cMapPacked: true,
+      standardFontDataUrl: asset('vendor/pdfjs/standard_fonts/')
+    });
+    const pdf = await task.promise;
+    try {
+      const splitting = pageCount > pdf.numPages;
+      const pages = [];
+      for (let i = 1; i <= pdf.numPages; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        const page = await pdf.getPage(i);
+        const viewport = page.getViewport({ scale: 1 });
+        let items = [];
+        try {
+          const content = await page.getTextContent();
+          items = content.items || [];
+        } catch (e) {}
+        const spread = splitting && isSpread(viewport.width, viewport.height);
+        if (spread) {
+          const halves = splitItems(items, viewport);
+          pages.push(runsFromItems(halves[0], viewport, 'left'));
+          pages.push(runsFromItems(halves[1], viewport, 'right'));
+        } else pages.push(runsFromItems(items, viewport, null));
+        try { page.cleanup(); } catch (e) {}
+      }
+      return pages;
+    } finally {
+      try { await pdf.destroy(); } catch (e) {}
+    }
+  }
+
+  window.PdfImport = { importFile, ocrBook, textIsSparse, asset, outlineFromBlob, readOutline, isSpread, textRunsFromBlob };
 })();

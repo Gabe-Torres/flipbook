@@ -188,11 +188,53 @@
     }, 20000);
   }
 
-  async function putText(bookId, index, text) {
+  function packRuns(runs) {
+    if (!Array.isArray(runs)) return [];
+    return runs.slice(0, 4000).map((run) => ({
+      text: String(run && run.text || '').slice(0, 80),
+      x: Math.round((Number(run && run.x) || 0) * 10000) / 10000,
+      y: Math.round((Number(run && run.y) || 0) * 10000) / 10000,
+      w: Math.round((Number(run && run.w) || 0) * 10000) / 10000,
+      h: Math.round((Number(run && run.h) || 0) * 10000) / 10000
+    })).filter((run) => run.text && run.w > 0 && run.h > 0);
+  }
+
+  async function putText(bookId, index, text, runs) {
     const db = await open();
+    const record = { bookId, index, text: text || '' };
+    if (runs) record.runs = packRuns(runs);
     await txDone(db, ['texts'], 'readwrite', (stores) => {
-      stores.texts.put({ bookId, index, text: text || '' });
+      stores.texts.put(record);
     });
+  }
+
+  async function putRuns(bookId, index, runs) {
+    const db = await open();
+    const row = await req(db.transaction('texts').objectStore('texts').get([bookId, index]));
+    const record = {
+      bookId,
+      index,
+      text: row && row.text || '',
+      runs: packRuns(runs)
+    };
+    await txDone(db, ['texts'], 'readwrite', (stores) => {
+      stores.texts.put(record);
+    });
+  }
+
+  async function getRuns(bookId) {
+    const db = await open();
+    const rows = await req(db.transaction('texts').objectStore('texts').index('byBook').getAll(bookId));
+    const book = await getBook(bookId);
+    const n = book ? book.pageCount : 0;
+    const runs = Array.from({ length: n }, () => []);
+    const seen = new Set();
+    (rows || []).forEach((row) => {
+      if (!row || row.index < 0 || row.index >= n || !Array.isArray(row.runs)) return;
+      runs[row.index] = row.runs;
+      seen.add(row.index);
+    });
+    return { runs, ready: n > 0 && seen.size === n };
   }
 
   async function getPage(bookId, index) {
@@ -482,7 +524,7 @@
   }
 
   window.BookDB = {
-    open, listBooks, getBook, putBook, patchBook, putPage, putText, getPage, getTexts, getCover, putPdf, getPdf, deleteBook, vacuum, setImporting,
+    open, listBooks, getBook, putBook, patchBook, putPage, putText, putRuns, getRuns, getPage, getTexts, getCover, putPdf, getPdf, deleteBook, vacuum, setImporting,
     getClickSound, putClickSound, clearClickSound,
     getOutline, putOutline, listChapters, putChapter, deleteChapter, listAnnotations, putAnnotation, deleteAnnotation
   };

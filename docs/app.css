@@ -216,6 +216,10 @@ label.filepick input{position:absolute;inset:0;width:100%;height:100%;opacity:0;
 .bookcard img.cover{width:56px;height:74px;object-fit:cover;border-radius:4px;background:#d9d0bc;flex:none;filter:none}
 .page{position:relative}
 .marks{position:absolute;inset:0;z-index:2;pointer-events:none}
+.search-glows{position:absolute;inset:0;z-index:3;pointer-events:none}
+.search-glow{position:absolute;border-radius:3px;background:rgba(255,214,60,.42);box-shadow:0 0 0 1px rgba(140,90,0,.75),0 0 10px rgba(255,196,40,.85)}
+.search-glow.current{background:rgba(255,170,20,.78);box-shadow:0 0 0 2px #fff6,0 0 0 4px rgba(160,80,0,.95),0 0 16px rgba(255,150,0,.95)}
+#book.curl-back .search-glows{transform:scaleX(-1)}
 body.annotating .marks{pointer-events:auto;touch-action:none}
 .mark-area,.mark-draft{position:absolute;box-sizing:border-box;border-radius:2px}
 .mark-area{background:rgba(212,175,55,.38);border:2px solid #8a6410;padding:0;min-width:0;min-height:0}

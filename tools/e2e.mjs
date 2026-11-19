@@ -207,6 +207,38 @@ try {
   console.log('search', searchText.replace(/\s+/g, ' ').slice(0, 240));
   if (!/marigold/i.test(searchText)) await fail('search did not find marigold');
   if (!/Page 2/.test(searchText)) await fail('search snippet missed page 2');
+  await page.waitForFunction(() => document.querySelectorAll('#book .search-glow').length >= 2, null, { timeout: 10000 });
+  const glows = await page.evaluate(() => [...document.querySelectorAll('#book .search-glow')].map((node) => {
+    const page = node.closest('.page');
+    return {
+      page: page ? +page.dataset.i : -1,
+      x: parseFloat(node.style.left),
+      y: parseFloat(node.style.top),
+      w: parseFloat(node.style.width),
+      h: parseFloat(node.style.height)
+    };
+  }));
+  console.log('search glows', JSON.stringify(glows));
+  const onPage = glows.find((glow) => glow.page === 1);
+  if (!onPage) await fail('marigold did not glow on page 2');
+  if (!(onPage.y > 5 && onPage.y < 45 && onPage.w > 2 && onPage.w < 40)) {
+    await fail('marigold glow is not on the word: ' + JSON.stringify(onPage));
+  }
+  await page.press('#searchInput', 'Enter');
+  await page.waitForFunction(() => {
+    const glows = [...document.querySelectorAll('#book .page[data-i="1"] .search-glow')];
+    return glows.length === 2 && glows[0].classList.contains('current') && !glows[1].classList.contains('current') && window.__flipbook.current === 1;
+  });
+  await page.press('#searchInput', 'Enter');
+  await page.waitForFunction(() => {
+    const glows = [...document.querySelectorAll('#book .page[data-i="1"] .search-glow')];
+    return glows[1] && glows[1].classList.contains('current') && !glows[0].classList.contains('current') && window.__flipbook.current === 1;
+  });
+  await page.press('#searchInput', 'Enter');
+  await page.waitForFunction(() => {
+    const glow = document.querySelector('#book .search-glow.current');
+    return glow && +glow.closest('.page').dataset.i === 5 && window.__flipbook.current === 5;
+  });
   await shot('search_results.png');
   await page.locator('.result').first().click();
   await page.waitForFunction(() => window.__flipbook.current === 1);

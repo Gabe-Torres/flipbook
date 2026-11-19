@@ -142,8 +142,22 @@
       onRecent: (list) => BookDB.patchBook(id, { recent: list }),
       onLibrary: () => showLibrary(),
       onDownload: () => downloadPdf(id, book.title),
-      onOcr: () => runOcr(id)
+      onOcr: () => runOcr(id),
+      loadRuns: () => loadTextRuns(id, book)
     };
+  }
+
+  async function loadTextRuns(id, book) {
+    const stored = await BookDB.getRuns(id);
+    if (stored.ready) return stored.runs;
+    if (book.ocr === 'done' || !book.hasPdf || !window.PdfImport || !PdfImport.textRunsFromBlob) return stored.runs;
+    const blob = await BookDB.getPdf(id);
+    if (!blob) return stored.runs;
+    const extracted = await PdfImport.textRunsFromBlob(blob, book.pageCount || 0);
+    const useful = extracted.some((list) => list && list.length);
+    if (!useful) return stored.runs;
+    for (let i = 0; i < extracted.length; i++) await BookDB.putRuns(id, i, extracted[i] || []);
+    return extracted;
   }
 
   async function openBook(id, explicitPage) {
