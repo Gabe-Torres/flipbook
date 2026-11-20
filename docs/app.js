@@ -13,6 +13,7 @@
   let bookId = '';
   let outline = [];
   let chapters = [];
+  let doneKeys = new Set();
   let annotations = [];
   let annoMode = 'read';
   let chapterEdit = '';
@@ -1066,39 +1067,31 @@
     renderMarkMode();
     if (annoMode !== 'read') closeSheet('notes');
   }
-  // Top-level outline entries, or the first level that names a page. Chapters added here get a tick too.
-  function firstMarkedPage(node) {
-    if (!node) return null;
-    if (Number.isInteger(node.page) && node.page >= 0) return node.page;
-    for (const child of node.items || []) {
-      const page = firstMarkedPage(child);
-      if (page != null) return page;
-    }
-    return null;
-  }
+  // Shallowest outline entries that name a page themselves. Chapters added here get a tick too.
   function chapterMarks() {
     const marks = [];
     const seen = new Set();
-    const add = (page, title) => {
+    const add = (page, title, key) => {
       if (!Number.isInteger(page) || page < 0 || page >= N || seen.has(page)) return;
       seen.add(page);
       const name = String(title || 'Chapter').replace(/\s+/g, ' ').trim() || 'Chapter';
-      marks.push({ page, title: name });
+      marks.push({ page, title: name, done: doneKeys.has(key) });
     };
     let level = Array.isArray(outline) ? outline : [];
     for (let depth = 0; depth < 8 && level.length; depth++) {
       const found = [];
       for (const node of level) {
-        const page = firstMarkedPage(node);
-        if (page != null) found.push({ page, title: node.title });
+        if (Number.isInteger(node.page) && node.page >= 0) {
+          found.push({ page: node.page, title: node.title, key: outlineKey(node.page, node.title) });
+        }
       }
       if (found.length) {
-        found.forEach((mark) => add(mark.page, mark.title));
+        found.forEach((mark) => add(mark.page, mark.title, mark.key));
         break;
       }
       level = level.flatMap((node) => node.items || []);
     }
-    for (const ch of chapters) add(ch.page, ch.title);
+    for (const ch of chapters) add(ch.page, ch.title, chapterKey(ch.id));
     marks.sort((a, b) => a.page - b.page);
     return marks;
   }
@@ -1122,8 +1115,9 @@
     const host = $('#progress');
     if (!tip || !host) return;
     let title = '';
-    for (const mark of chapterMarks()) if (mark.page <= page) title = mark.title;
-    tip.textContent = title ? title + ' · ' + (page + 1) : 'Page ' + (page + 1);
+    let done = false;
+    for (const mark of chapterMarks()) if (mark.page <= page) { title = mark.title; done = !!mark.done; }
+    tip.textContent = title ? title + (done ? ' · done' : '') + ' · ' + (page + 1) : 'Page ' + (page + 1);
     tip.classList.remove('hidden');
     const hostRect = host.getBoundingClientRect();
     const width = tip.offsetWidth;
@@ -1151,7 +1145,7 @@
     ticks.replaceChildren();
     for (const mark of marks) {
       const tick = document.createElement('i');
-      tick.className = 'progress-tick' + (mark.page <= page ? ' seen' : '');
+      tick.className = 'progress-tick' + (mark.done ? ' done' : (mark.page <= page ? ' seen' : ''));
       tick.style.left = (progressRatio(mark.page) * 100) + '%';
       tick.dataset.page = String(mark.page);
       tick.dataset.title = mark.title;
@@ -1191,6 +1185,31 @@
       else if (e.key === 'End') { e.preventDefault(); e.stopPropagation(); go(N - 1, false); }
     });
   }
+  function chapterKey(id) { return 'c:' + id; }
+  function outlineKey(page, title) {
+    return 'o:' + page + ':' + String(title || '').replace(/\s+/g, ' ').trim();
+  }
+  function saveDone() {
+    if (SESSION && SESSION.onDone) SESSION.onDone([...doneKeys].sort());
+  }
+  function toggleDone(key) {
+    if (doneKeys.has(key)) doneKeys.delete(key);
+    else doneKeys.add(key);
+    saveDone();
+    renderContents();
+    renderProgress();
+  }
+  function doneToggle(key, title) {
+    const on = doneKeys.has(key);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'done-toggle' + (on ? ' on' : '');
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    btn.setAttribute('aria-label', on ? title + ' is finished' : 'Mark ' + title + ' finished');
+    btn.textContent = on ? '✓' : '';
+    btn.onclick = (e) => { e.stopPropagation(); toggleDone(key); };
+    return btn;
+  }
   function renderToc(nodes) {
     const ul = document.createElement('ul');
     ul.className = 'toc';
@@ -1202,6 +1221,9 @@
         heading.textContent = node.title;
         li.appendChild(heading);
       } else {
+        const row = document.createElement('div');
+        const key = outlineKey(node.page, node.title);
+        row.className = 'toc-row' + (doneKeys.has(key) ? ' done' : '');
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'toc-item';
@@ -1209,7 +1231,8 @@
         btn.querySelector('.toc-label').textContent = node.title;
         btn.querySelector('small').textContent = String(node.page + 1);
         btn.onclick = () => { go(node.page, false); if (phone) closeSheet('contents'); };
-        li.appendChild(btn);
+        row.append(doneToggle(key, node.title), btn);
+        li.appendChild(row);
       }
       if (node.items && node.items.length) li.appendChild(renderToc(node.items));
       ul.appendChild(li);
@@ -1248,7 +1271,8 @@
     }
     chapters.forEach((ch) => {
       const row = document.createElement('div');
-      row.className = 'chapter-row';
+      const key = chapterKey(ch.id);
+      row.className = 'chapter-row' + (doneKeys.has(key) ? ' done' : '');
       const jump = document.createElement('button');
       jump.type = 'button';
       jump.className = 'jump';
@@ -1266,7 +1290,7 @@
       remove.className = 'mini danger';
       remove.textContent = 'Remove';
       remove.onclick = () => deleteChapter(ch.id);
-      row.append(jump, edit, remove);
+      row.append(doneToggle(key, ch.title), jump, edit, remove);
       box.appendChild(row);
     });
   }
@@ -1296,6 +1320,7 @@
     try { await BookDB.deleteChapter(id); } catch (e) {}
     chapters = chapters.filter((ch) => ch.id !== id);
     if (chapterEdit === id) chapterEdit = '';
+    if (doneKeys.delete(chapterKey(id))) saveDone();
     renderContents();
     renderProgress();
     toast('Chapter removed.');
@@ -1491,6 +1516,7 @@
     bookId = session.bookId || '';
     outline = Array.isArray(session.outline) ? session.outline : [];
     chapters = Array.isArray(session.chapters) ? session.chapters.map((ch) => ({ ...ch })) : [];
+    doneKeys = new Set(Array.isArray(session.doneChapters) ? session.doneChapters : []);
     chapterEdit = '';
     annoMode = 'read';
     try { annotations = bookId ? await BookDB.listAnnotations(bookId) : []; }
@@ -1544,6 +1570,7 @@
     bookId = '';
     outline = [];
     chapters = [];
+    doneKeys = new Set();
     annotations = [];
     annoMode = 'read';
     chapterEdit = '';

@@ -90,6 +90,7 @@ body.sb #stage{left:calc(170px + var(--sal))}
 .progress-ticks{position:absolute;inset:0}
 .progress-tick{position:absolute;top:-5px;width:2px;height:13px;margin-left:-1px;background:var(--muted);opacity:.7;pointer-events:none}
 .progress-tick.seen{background:var(--accent);opacity:1}
+.progress-tick.done{width:8px;height:8px;top:-3px;margin-left:-4px;border-radius:50%;background:var(--accent2);opacity:1}
 .progress-tip{position:absolute;bottom:14px;max-width:min(240px,70vw);padding:4px 8px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);color:var(--text);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;box-shadow:0 8px 24px var(--shadow)}
 @media (prefers-reduced-motion:reduce){.progress-fill{transition:none}}
 /* sheets & panels */
@@ -244,6 +245,11 @@ body:not(.annotating) .mark-area,body:not(.annotating) .mark-note{pointer-events
 .chapter-form input[type="number"]{width:88px;height:40px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);color:var(--text);padding:0 10px}
 .chapter-row,.note-row{display:flex;gap:8px;align-items:center;padding:4px 0}
 .chapter-row .jump,.note-row .jump{flex:1}
+.toc-row{display:flex;align-items:flex-start;gap:4px}
+.toc-row .toc-item{flex:1;min-width:0}
+.sheetbody .done-toggle{flex:none;width:36px;min-width:36px;height:36px;padding:0;font-weight:700}
+.sheetbody .done-toggle.on{background:var(--accent2);border-color:var(--accent2);color:#fff}
+.chapter-row.done .toc-label,.toc-row.done .toc-label{color:var(--muted)}
 .sheetbody .mini{height:36px;min-width:36px;padding:0 10px}
 .note-row .kind{color:var(--accent);font-size:12px;font-weight:700}
 #noteText{width:100%;min-height:120px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);color:var(--text);padding:10px 12px;font-size:16px;line-height:1.4;resize:vertical}

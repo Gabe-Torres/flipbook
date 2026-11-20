@@ -192,8 +192,25 @@ try {
     const tip = document.querySelector('#progressTip');
     return tip && !tip.classList.contains('hidden') && tip.textContent === 'The lamp · 4';
   }, null, { timeout: 4000 });
-  await page.click('#chapterList .mini.danger');
-  await page.waitForFunction(() => !document.querySelector('.progress-tick'));
+  await page.click('#chapterList .done-toggle');
+  await page.waitForFunction(async () => {
+    const id = new URLSearchParams(location.hash.slice(1)).get('b');
+    const book = await BookDB.getBook(id);
+    const row = document.querySelector('#chapterList .chapter-row');
+    const tick = document.querySelector('.progress-tick');
+    const box = document.querySelector('#chapterList .done-toggle');
+    return book && Array.isArray(book.doneChapters) && book.doneChapters.length === 1
+      && row && row.classList.contains('done')
+      && tick && tick.classList.contains('done')
+      && box && box.getAttribute('aria-pressed') === 'true'
+      && window.__flipbook.current === 1;
+  }, null, { timeout: 10000 });
+  await page.evaluate(async () => {
+    const id = new URLSearchParams(location.hash.slice(1)).get('b');
+    await BookDB.putOutline(id, [
+      { title: 'Part', page: null, items: [{ title: 'Forest', page: 1, items: [] }] }
+    ]);
+  });
   await page.click('[data-close="contents"]');
   const track = await page.locator('#progressTrack').boundingBox();
   await page.mouse.click(track.x + track.width - 1, track.y + track.height / 2);
@@ -276,6 +293,41 @@ try {
   const marksAfter = await page.evaluate(() => window.__flipbook.bookmarks.map((mark) => mark.label));
   console.log('bookmarks after reload', marksAfter);
   if (!marksAfter.includes('Copper bell')) await fail('bookmark did not survive reload');
+  await page.click('[data-open="contents"]');
+  await page.waitForFunction(() => {
+    const row = document.querySelector('#chapterList .chapter-row.done');
+    const box = document.querySelector('#chapterList .done-toggle');
+    const tick = document.querySelector('.progress-tick.done');
+    const heading = document.querySelector('#outlineList .toc-heading');
+    const toggles = document.querySelectorAll('#outlineList .done-toggle');
+    return row && box && box.getAttribute('aria-pressed') === 'true' && tick
+      && heading && heading.textContent === 'Part'
+      && toggles.length === 1 && toggles[0].getAttribute('aria-pressed') === 'false';
+  }, null, { timeout: 10000 });
+  await page.click('#outlineList .done-toggle');
+  await page.waitForFunction(async () => {
+    const id = new URLSearchParams(location.hash.slice(1)).get('b');
+    const book = await BookDB.getBook(id);
+    const keys = book && book.doneChapters || [];
+    const forestRow = document.querySelector('#outlineList .toc-row');
+    const forestTick = [...document.querySelectorAll('.progress-tick')].find((tick) => tick.dataset.title === 'Forest');
+    return keys.length === 2 && keys.indexOf('o:1:Forest') !== -1
+      && forestRow && forestRow.classList.contains('done')
+      && forestTick && forestTick.classList.contains('done') && forestTick.dataset.page === '1'
+      && window.__flipbook.current === 3;
+  }, null, { timeout: 10000 });
+  await page.click('#outlineList .done-toggle');
+  await page.click('#chapterList .done-toggle');
+  await page.waitForFunction(async () => {
+    const id = new URLSearchParams(location.hash.slice(1)).get('b');
+    const book = await BookDB.getBook(id);
+    return book && (!book.doneChapters || book.doneChapters.length === 0)
+      && !document.querySelector('#chapterList .chapter-row.done')
+      && !document.querySelector('#outlineList .toc-row.done');
+  }, null, { timeout: 10000 });
+  await page.click('#chapterList .mini.danger');
+  await page.waitForFunction(() => !document.querySelector('.progress-tick[data-title="The lamp"]'));
+  await page.click('[data-close="contents"]');
   await page.evaluate(() => BookDB.vacuum());
   await page.waitForFunction(async () => {
     const row = await BookDB.getPage('orphan-left-behind', 0);
