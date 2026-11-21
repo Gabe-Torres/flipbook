@@ -1,12 +1,12 @@
 :root{--bg:#0f1115;--bg-glow:#1a1e27;--panel:#171a21;--panel2:#1f2430;--line:#2a3040;--text:#e7e9ee;--muted:#9aa3b2;
-  --accent:#d4af37;--accent-fill:#d4af37;--accent-ink:#1a1405;--accent2:#3fb68b;--danger:#e06c6c;--ok-text:#bfe9d6;--snip:#cfd3db;--dot:#777;
+  --accent:#d4af37;--accent-fill:#d4af37;--accent-ink:#1a1405;--accent2:#3fb68b;--progress:#4c8dff;--danger:#e06c6c;--ok-text:#bfe9d6;--snip:#cfd3db;--dot:#777;
   --bar:rgba(18,21,27,.92);--bar-solid:rgba(18,21,27,.96);--shadow:rgba(0,0,0,.5);--book-shadow:0 30px 80px rgba(0,0,0,.55);
   --nav:rgba(255,255,255,.06);--nav-hover:rgba(255,255,255,.14);--drop:rgba(255,255,255,.03);--drop-over:rgba(212,175,55,.08);
   --overlay:rgba(0,0,0,.55);--zoom:rgba(8,9,12,.97);--thumb:#222;--card-hover:#4a5568;--mark:#fff;--mark-bg:rgba(212,175,55,.35);
   --badge:rgba(0,0,0,.72);--badge-text:#fff;--focus:#f0d060;color-scheme:dark;
   --sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px);--sal:env(safe-area-inset-left,0px);--sar:env(safe-area-inset-right,0px);--top:56px;--bottom:0px}
 html[data-theme="light"]{--bg:#efeae1;--bg-glow:#f7f3eb;--panel:#fffdf8;--panel2:#f3eee4;--line:#d5cbbd;--text:#1c1915;--muted:#5c564c;
-  --accent:#6f5410;--accent-fill:#c6a043;--accent-ink:#1a1405;--accent2:#0c6b48;--danger:#a32020;--ok-text:#0c6b48;--snip:#3f382f;--dot:#8a8175;
+  --accent:#6f5410;--accent-fill:#c6a043;--accent-ink:#1a1405;--accent2:#0c6b48;--progress:#1a66d1;--danger:#a32020;--ok-text:#0c6b48;--snip:#3f382f;--dot:#8a8175;
   --bar:rgba(255,252,246,.92);--bar-solid:rgba(255,252,246,.96);--shadow:rgba(60,42,18,.18);--book-shadow:0 16px 40px rgba(70,48,20,.16),0 0 0 1px rgba(70,48,20,.14);
   --nav:rgba(28,25,21,.06);--nav-hover:rgba(28,25,21,.12);--drop:rgba(255,255,255,.55);--drop-over:rgba(198,160,67,.18);
   --overlay:rgba(40,32,20,.45);--zoom:rgba(247,243,235,.98);--thumb:#e4ddd0;--card-hover:#b7ad9c;--mark:#1c1915;--mark-bg:rgba(111,84,16,.22);
@@ -89,12 +89,12 @@ body.sb #stage{left:calc(170px + var(--sal))}
 .progress{position:fixed;left:var(--sal);right:var(--sar);bottom:var(--bottom);height:16px;z-index:12;display:flex;align-items:flex-end;touch-action:none;cursor:pointer}
 .progress:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .progress-track{position:relative;width:100%;height:3px;background:var(--line)}
-.progress-fill{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--accent);transition:width .15s linear}
-.progress-fill::after{content:"";position:absolute;right:-4px;top:50%;width:8px;height:8px;border-radius:50%;background:var(--accent);transform:translateY(-50%)}
+.progress-fill{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--progress);transition:width .15s linear}
+.progress-fill::after{content:"";position:absolute;right:-4px;top:50%;width:8px;height:8px;border-radius:50%;background:var(--progress);transform:translateY(-50%)}
 .progress.scrub .progress-fill{transition:none}
 .progress-ticks{position:absolute;inset:0}
 .progress-tick{position:absolute;top:-5px;width:2px;height:13px;margin-left:-1px;background:var(--muted);opacity:.7;pointer-events:none}
-.progress-tick.seen{background:var(--accent);opacity:1}
+.progress-tick.seen{background:var(--progress);opacity:1}
 .progress-tick.done{width:8px;height:8px;top:-3px;margin-left:-4px;border-radius:50%;background:var(--accent2);opacity:1}
 .progress-tip{position:absolute;bottom:14px;max-width:min(240px,70vw);padding:4px 8px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);color:var(--text);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;box-shadow:0 8px 24px var(--shadow)}
 @media (prefers-reduced-motion:reduce){.progress-fill{transition:none}}
