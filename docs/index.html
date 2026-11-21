@@ -79,7 +79,7 @@
   <div class="tools">
     <button id="btnFirst" class="icon" type="button" data-shortcut="Home" aria-keyshortcuts="Home" aria-label="First page">⏮</button>
     <button id="btnPrev" class="icon" type="button" data-shortcut="←" aria-keyshortcuts="ArrowLeft" aria-label="Previous page">◀</button>
-    <span class="pageinfo"><input id="pageInput" type="number" inputmode="numeric" min="1" value="1" data-shortcut="G" aria-keyshortcuts="G" aria-label="Page number"> <span>/ <b class="pageCount">–</b></span></span>
+    <span class="pageinfo"><span id="chapterHere" class="here hidden"></span><input id="pageInput" type="number" inputmode="numeric" min="1" value="1" data-shortcut="G" aria-keyshortcuts="G" aria-label="Page number"> <span>/ <b class="pageCount">–</b></span></span>
     <button id="btnNext" class="icon" type="button" data-shortcut="→" aria-keyshortcuts="ArrowRight" aria-label="Next page">▶</button>
     <button id="btnLast" class="icon" type="button" data-shortcut="End" aria-keyshortcuts="End" aria-label="Last page">⏭</button>
     <button class="icon bm-toggle" type="button" data-shortcut="B" aria-keyshortcuts="B" aria-label="Bookmark this page">☆</button>
@@ -121,7 +121,7 @@
 <nav class="bottombar">
   <button type="button" data-open="sidebar" data-shortcut="T" aria-keyshortcuts="T" aria-label="Pages"><span>▦</span><small>Pages</small></button>
   <button class="bb-prev" type="button" data-shortcut="←" aria-keyshortcuts="ArrowLeft" aria-label="Previous page"><span>◀</span><small>Prev</small></button>
-  <button class="bb-page" type="button" data-shortcut="G" aria-keyshortcuts="G" aria-label="Go to page"><span class="bb-num">1</span><small>of <b class="pageCount">–</b></small></button>
+  <button class="bb-page" type="button" data-shortcut="G" aria-keyshortcuts="G" aria-label="Go to page"><span class="bb-num">1</span><small>of <b class="pageCount">–</b></small><small class="bb-chapter hidden"></small></button>
   <button class="bb-next" type="button" data-shortcut="→" aria-keyshortcuts="ArrowRight" aria-label="Next page"><span>▶</span><small>Next</small></button>
   <button type="button" data-open="search" data-shortcut="/" aria-keyshortcuts="/" aria-label="Search"><span>🔍</span><small>Search</small></button>
   <button type="button" data-open="contents" data-shortcut="C" aria-keyshortcuts="C" aria-label="Contents"><span>☰</span><small>Contents</small></button>

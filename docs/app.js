@@ -201,6 +201,7 @@
     saveState();
     updateBmToggle();
     renderProgress();
+    renderHeading();
   }
   let turningBack = false;
   function curls() {
@@ -830,12 +831,62 @@
     const type = (file && file.type) || '';
     return /\.(mp3|wav|m4a|ogg)$/i.test(name) || /audio\/(mpeg|wav|wave|x-wav|mp4|aac|x-m4a|m4a|ogg)/i.test(type);
   }
-  function setTitle(title) {
-    const text = title || 'Flipbook';
-    const desk = $('#bookTitle'), mob = $('#bookTitlePhone');
-    if (desk) desk.textContent = text;
-    if (mob) mob.textContent = text;
-    document.title = text === 'Flipbook' ? 'Flipbook' : `${text} — Flipbook`;
+  // The chapter in effect on this page: the latest contents entry that has already started.
+  // A nested entry beats its parent on the same page. A chapter you added beats an outline entry there.
+  function chapterHere() {
+    if (!SESSION || !N) return '';
+    const pages = visiblePages();
+    const page = pages.length ? pages[pages.length - 1] : current;
+    let best = null;
+    const consider = (start, title, depth) => {
+      if (!Number.isInteger(start) || start < 0 || start > page || start >= N) return;
+      const name = String(title || '').replace(/\s+/g, ' ').trim();
+      if (!name) return;
+      if (!best || start > best.page || (start === best.page && depth > best.depth)) best = { page: start, title: name, depth };
+    };
+    const walk = (nodes, depth) => {
+      for (const node of nodes || []) {
+        if (!node) continue;
+        consider(node.page, node.title, depth);
+        if (node.items && node.items.length) walk(node.items, depth + 1);
+      }
+    };
+    walk(outline, 0);
+    for (const ch of chapters) consider(ch.page, ch.title, 1000);
+    return best ? best.title : '';
+  }
+  function renderHeading() {
+    const book = (SESSION && SESSION.title) || 'Flipbook';
+    const chapter = chapterHere();
+    const paint = (el) => {
+      if (!el) return;
+      el.replaceChildren();
+      const name = document.createElement('span');
+      name.className = 'bookname';
+      name.textContent = book;
+      el.appendChild(name);
+      if (chapter) {
+        const mark = document.createElement('span');
+        mark.className = 'chapter';
+        mark.textContent = chapter;
+        el.appendChild(mark);
+      }
+      el.setAttribute('aria-label', chapter ? book + ', ' + chapter : book);
+    };
+    paint($('#bookTitle'));
+    paint($('#bookTitlePhone'));
+    const here = $('#chapterHere');
+    if (here) {
+      here.textContent = chapter;
+      here.classList.toggle('hidden', !chapter);
+    }
+    const pocket = $('.bb-chapter');
+    if (pocket) {
+      pocket.textContent = chapter;
+      pocket.classList.toggle('hidden', !chapter);
+    }
+    if (!SESSION) document.title = 'Flipbook';
+    else document.title = chapter ? chapter + ' — ' + book : (book === 'Flipbook' ? 'Flipbook' : book + ' — Flipbook');
   }
   function applyTexts(texts) {
     DATA = { pages: texts.map((text) => ({ text: text || '' })) };
@@ -1311,6 +1362,7 @@
       chapterEdit = '';
       renderContents();
       renderProgress();
+      renderHeading();
       toast(existing ? 'Chapter updated.' : 'Chapter added on this device.');
     } catch (err) {
       toast((err && err.message) || 'Could not save that chapter.');
@@ -1323,6 +1375,7 @@
     if (doneKeys.delete(chapterKey(id))) saveDone();
     renderContents();
     renderProgress();
+    renderHeading();
     toast('Chapter removed.');
   }
   function renderNotes() {
@@ -1522,7 +1575,7 @@
     try { annotations = bookId ? await BookDB.listAnnotations(bookId) : []; }
     catch (e) { annotations = []; }
     zScale = state.zoom || 1;
-    setTitle(session.title);
+    renderHeading();
     $$('.pageCount').forEach((el) => { el.textContent = N; });
     const input = $('#pageInput');
     if (input) { input.max = N; input.value = 1; }
@@ -1584,6 +1637,7 @@
     activeSpot = -1;
     paintSearchGlows();
     renderProgress();
+    renderHeading();
     const noteBox = $('#noteDialog');
     if (noteBox) noteBox.classList.add('hidden');
   }

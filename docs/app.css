@@ -22,13 +22,18 @@ input{font:inherit}
 .hidden{display:none!important}
 .muted{color:var(--muted)}.small{font-size:12px}
 .topbar{position:fixed;top:0;left:0;right:0;height:calc(56px + var(--sat));padding:var(--sat) calc(12px + var(--sar)) 0 calc(12px + var(--sal));display:flex;align-items:center;gap:10px;background:var(--bar);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-bottom:1px solid var(--line);z-index:20}
-.title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto}
-.title span{color:var(--accent);font-weight:500;margin-left:6px}
+.title{display:flex;align-items:baseline;font-weight:600;min-width:0;flex:0 1 auto;max-width:46%;overflow:hidden}
+.title:has(.chapter){flex:1 1 280px;max-width:52%}
+.title .bookname{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:0 1 42%}
+.title .chapter{color:var(--accent);font-weight:500;margin-left:8px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1 1 58%}
+.title:not(:has(.chapter)) .bookname{flex:1 1 auto}
 .icon{background:var(--panel2);border:1px solid var(--line);border-radius:8px;height:34px;min-width:34px;padding:0 8px;transition:.15s;display:inline-flex;align-items:center;justify-content:center}
 .icon:hover{border-color:var(--accent);color:var(--accent)}
 .icon.on{color:var(--accent);border-color:var(--accent)}
 .tools{display:flex;align-items:center;gap:6px;margin-left:auto}
 .pageinfo{display:flex;align-items:center;gap:4px;color:var(--muted)}
+.pageinfo .here{color:var(--accent);font-weight:600;max-width:34vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}
+@media (min-width:961px){#chapterHere{display:none!important}}
 .pageinfo input{width:56px;height:34px;background:var(--panel);border:1px solid var(--line);border-radius:8px;color:var(--text);text-align:center}
 .pageinfo input::-webkit-inner-spin-button{display:none}
 .pdf{white-space:nowrap;display:inline-flex;align-items:center;justify-content:center;height:34px;padding:0 12px;border-radius:8px;background:var(--accent-fill);color:var(--accent-ink);font-weight:700;text-decoration:none}
@@ -152,7 +157,12 @@ button.danger{color:var(--danger)}
 body.phone{--top:calc(44px + var(--sat));--bottom:calc(62px + var(--sab))}
 body.phone .topbar{display:none}
 body.phone .phonebar{display:flex;position:fixed;top:0;left:0;right:0;height:var(--top);padding:var(--sat) calc(12px + var(--sar)) 0 calc(12px + var(--sal));align-items:center;gap:8px;background:var(--bar);border-bottom:1px solid var(--line);z-index:20}
-.ptitle{font-weight:600;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ptitle span{color:var(--accent);font-weight:500}
+.ptitle{font-weight:600;flex:1;display:flex;align-items:baseline;min-width:0;overflow:hidden}
+.ptitle .bookname{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:0 1 auto}
+.ptitle .chapter{color:var(--accent);font-weight:500;margin-left:6px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1 1 auto}
+.ptitle:not(:has(.chapter)) .bookname{flex:1 1 auto}
+.bb-chapter{display:none}
+body.phone.land .bottombar .bb-chapter:not(.hidden){display:block;font-size:9px;color:var(--accent);font-weight:700;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 body.phone .bottombar{display:flex;position:fixed;left:0;right:0;bottom:0;height:var(--bottom);padding:0 var(--sar) var(--sab) var(--sal);background:var(--bar-solid);border-top:1px solid var(--line);z-index:25}
 .bottombar button{flex:1 1 0;min-width:0;border:none;background:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:4px 0;color:var(--text)}
 .bottombar button span{font-size:20px;line-height:24px}

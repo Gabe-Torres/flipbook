@@ -183,7 +183,11 @@ try {
   await page.click('#chapterSave');
   await page.waitForFunction(() => {
     const tick = document.querySelector('.progress-tick');
-    return tick && tick.dataset.title === 'The lamp' && tick.dataset.page === '3';
+    const title = document.querySelector('#bookTitle');
+    const name = title && title.querySelector('.bookname');
+    return tick && tick.dataset.title === 'The lamp' && tick.dataset.page === '3'
+      && name && name.textContent === 'Harbor Notes' && !title.querySelector('.chapter')
+      && document.querySelector('#pageInput').value === '2';
   }, null, { timeout: 10000 });
   const tickBox = await page.locator('.progress-tick').boundingBox();
   const progressBox = await page.locator('#progress').boundingBox();
@@ -208,15 +212,25 @@ try {
   await page.evaluate(async () => {
     const id = new URLSearchParams(location.hash.slice(1)).get('b');
     await BookDB.putOutline(id, [
-      { title: 'Part', page: null, items: [{ title: 'Forest', page: 1, items: [] }] }
+      { title: 'Part', page: null, items: [
+        { title: 'Forest', page: 1, items: [{ title: 'Temple', page: 2, items: [] }] }
+      ]}
     ]);
   });
   await page.click('[data-close="contents"]');
   const track = await page.locator('#progressTrack').boundingBox();
   await page.mouse.click(track.x + track.width - 1, track.y + track.height / 2);
-  await page.waitForFunction(() => window.__flipbook.current === 5);
+  await page.waitForFunction(() => {
+    const chapter = document.querySelector('#bookTitle .chapter');
+    const phone = document.querySelector('#bookTitlePhone .chapter');
+    return window.__flipbook.current === 5
+      && chapter && chapter.textContent === 'The lamp'
+      && phone && phone.textContent === 'The lamp'
+      && document.title === 'The lamp — Harbor Notes'
+      && document.querySelector('#pageInput').value === '6';
+  });
   await page.evaluate(() => window.__flipbook.go(1, false));
-  await page.waitForFunction(() => window.__flipbook.current === 1);
+  await page.waitForFunction(() => window.__flipbook.current === 1 && !document.querySelector('#bookTitle .chapter') && document.title === 'Harbor Notes — Flipbook');
 
   await page.fill('#searchInput', 'marigold');
   await page.waitForSelector('.result', { timeout: 10000 });
@@ -300,9 +314,11 @@ try {
     const tick = document.querySelector('.progress-tick.done');
     const heading = document.querySelector('#outlineList .toc-heading');
     const toggles = document.querySelectorAll('#outlineList .done-toggle');
+    const chapter = document.querySelector('#bookTitle .chapter');
     return row && box && box.getAttribute('aria-pressed') === 'true' && tick
       && heading && heading.textContent === 'Part'
-      && toggles.length === 1 && toggles[0].getAttribute('aria-pressed') === 'false';
+      && toggles.length === 2 && [...toggles].every((btn) => btn.getAttribute('aria-pressed') === 'false')
+      && chapter && chapter.textContent === 'The lamp';
   }, null, { timeout: 10000 });
   await page.click('#outlineList .done-toggle');
   await page.waitForFunction(async () => {
@@ -326,8 +342,21 @@ try {
       && !document.querySelector('#outlineList .toc-row.done');
   }, null, { timeout: 10000 });
   await page.click('#chapterList .mini.danger');
-  await page.waitForFunction(() => !document.querySelector('.progress-tick[data-title="The lamp"]'));
+  await page.waitForFunction(() => !document.querySelector('.progress-tick[data-title="The lamp"]')
+    && document.querySelector('#bookTitle .chapter')
+    && document.querySelector('#bookTitle .chapter').textContent === 'Temple');
   await page.click('[data-close="contents"]');
+  await page.evaluate(() => window.__flipbook.go(1, false));
+  await page.waitForFunction(() => window.__flipbook.current === 1
+    && document.querySelector('#bookTitle .chapter')
+    && document.querySelector('#bookTitle .chapter').textContent === 'Temple');
+  await page.evaluate(() => window.__flipbook.go(0, false));
+  await page.waitForFunction(() => window.__flipbook.current === 0 && !document.querySelector('#bookTitle .chapter'));
+  await page.evaluate(() => window.__flipbook.go(3, false));
+  await page.waitForFunction(() => window.__flipbook.current === 3
+    && document.querySelector('#bookTitle .chapter')
+    && document.querySelector('#bookTitle .chapter').textContent === 'Temple'
+    && document.title === 'Temple — Harbor Notes');
   await page.evaluate(() => BookDB.vacuum());
   await page.waitForFunction(async () => {
     const row = await BookDB.getPage('orphan-left-behind', 0);
@@ -424,6 +453,8 @@ try {
   console.log('mobile', bars);
   if (bars.top !== 'none' || bars.bottom === 'none' || bars.phonebar === 'none') await fail('mobile chrome is wrong ' + JSON.stringify(bars));
   if (bars.mode !== 'portrait') await fail('phone should be one page, got ' + bars.mode);
+  const phoneChapter = await page.locator('#bookTitlePhone .chapter').innerText();
+  if (phoneChapter !== 'Temple') await fail('phone title did not follow the chapter: ' + phoneChapter);
   await page.waitForTimeout(300);
   await shot('mobile_reader.png');
 

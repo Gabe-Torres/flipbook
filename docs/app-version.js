@@ -1,1 +1,1 @@
-window.APP_VERSION={"version": "04f7f8155afd", "shellCache": "flipbook-04f7f8155afd"};
+window.APP_VERSION={"version": "e1fbb4330574", "shellCache": "flipbook-e1fbb4330574"};

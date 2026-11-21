@@ -21,7 +21,7 @@ On a computer:
 - A thin bar along the bottom shows how far through the book you are. Each chapter is a mark. Click or drag the bar to turn to that part. A finished chapter turns that mark green.
 - `/` searches. Each match glows on the page. Enter steps to the next glow. Quotes around a phrase look for those exact words.
 - `B` bookmarks the page. You can give it a label. `M` opens the list. Bookmarked pages get a red ribbon.
-- `C` opens the contents. If the PDF has an outline, those chapters are listed, including nested ones, and a click turns to that page. A PDF with no outline says so. You can add your own chapters, with a title and a page number. A box beside a chapter marks it finished. Those stay in this browser with the book.
+- `C` opens the contents. If the PDF has an outline, those chapters are listed, including nested ones, and a click turns to that page. A PDF with no outline says so. You can add your own chapters, with a title and a page number. A box beside a chapter marks it finished. Those stay in this browser with the book. The title bar names the chapter you are in, and it changes as you turn.
 - `H` opens highlights and notes. Highlight drags a rectangle on the page. Note places a sticky note. Both work on a scanned page. Read mode is for turning pages. Highlights and notes stay in this browser and are not written into the PDF.
 - `Z` or a double-click zooms. `T` opens the thumbnails. `F` is full screen. `G` jumps to a page number.
 - Rest the pointer on a control and a note names its key, such as Press A, then closes on its own.
