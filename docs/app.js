@@ -148,6 +148,11 @@
     flip.loadFromHTML(nodes);
     installBackwardTurn(flip);
     flip.on('flip', (e) => { if (myEpoch === epoch) onPage(e.data); });
+    flip.on('changeState', (e) => {
+      if (myEpoch !== epoch || !e || e.data !== 'flipping') return;
+      paperArmed = true;
+      playPaperSound();
+    });
     renderRibbons();
     paintMarks();
     onPage(flip.getCurrentPageIndex());
@@ -190,6 +195,9 @@
   }
   function onPage(i) {
     if (!SESSION) return;
+    const step = Math.abs(i - current);
+    if (step > 0 && step <= 2 && !paperArmed) playPaperSound();
+    paperArmed = false;
     current = i; ensureLoaded(i);
     const input = $('#pageInput');
     if (input) input.value = i + 1;
@@ -204,8 +212,20 @@
     renderHeading();
   }
   let turningBack = false;
+  let paperArmed = false;
   function curls() {
     try { return localStorage.getItem('flipbook.animate') !== '0'; } catch (e) { return true; }
+  }
+  function paperOn() {
+    try { return localStorage.getItem('flipbook.paper') === '1'; } catch (e) { return false; }
+  }
+  function playPaperSound() {
+    if (!paperOn() || !window.Fairy || !Fairy.playPaper) return;
+    Fairy.playPaper();
+  }
+  function setPaper(on) {
+    try { localStorage.setItem('flipbook.paper', on ? '1' : '0'); } catch (e) {}
+    if (on) playPaperSound();
   }
   function setPageTurn(on, announce) {
     try { localStorage.setItem('flipbook.animate', on ? '1' : '0'); } catch (e) {}
@@ -788,6 +808,8 @@
       b.classList.toggle('on', on);
       b.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
+    const paper = $('#paperSound');
+    if (paper) paper.checked = paperOn();
     const version = $('#versionInfo');
     if (version) version.textContent = `Version ${V.version}`;
     const menuPage = $('#menuPage');
@@ -919,6 +941,8 @@
     $('#menuPage').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#menuGo').click(); });
     $$('#layoutSeg button').forEach((b) => b.onclick = () => { state.layout = b.dataset.layout; saveState(); renderMenu(); relayout(true); });
     $$('#animSeg button').forEach((b) => b.onclick = () => setPageTurn(b.dataset.anim === 'on', true));
+    const paperBox = $('#paperSound');
+    if (paperBox) paperBox.onchange = (e) => setPaper(e.target.checked);
     $$('#themeSeg button').forEach((b) => b.onclick = () => { if (window.Theme) { Theme.set(b.dataset.theme); renderMenu(); } });
     $$('#markSeg button').forEach((b) => b.onclick = () => setAnnoMode(b.dataset.mode));
     const chapterForm = $('#chapterForm');

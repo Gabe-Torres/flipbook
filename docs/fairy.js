@@ -134,6 +134,56 @@
     for (const [freq, delay] of notes) tone(now + delay, 'sine', freq, freq * 1.02, 0.2, 0.07);
   }
 
+  let paperBuffer = null;
+  // A short paper rustle made here, not taken from a recording.
+  function paperNoise(ctx) {
+    if (paperBuffer && paperBuffer.sampleRate === ctx.sampleRate) return paperBuffer;
+    const rate = ctx.sampleRate;
+    const length = Math.floor(rate * 0.26);
+    const buffer = ctx.createBuffer(1, length, rate);
+    const data = buffer.getChannelData(0);
+    let seed = 0x9e3779b9;
+    for (let i = 0; i < length; i++) {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      const white = (seed / 4294967296) * 2 - 1;
+      const t = i / length;
+      const env = Math.sin(Math.PI * t) * (0.65 + 0.35 * Math.sin(t * Math.PI * 5));
+      data[i] = white * env;
+    }
+    paperBuffer = buffer;
+    return buffer;
+  }
+
+  function rustle() {
+    try {
+      const ctx = ensureAudio();
+      if (!ctx) return false;
+      const now = ctx.currentTime;
+      const src = ctx.createBufferSource();
+      src.buffer = paperNoise(ctx);
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.Q.value = 0.65;
+      filter.frequency.setValueAtTime(700, now);
+      filter.frequency.exponentialRampToValueAtTime(2200, now + 0.07);
+      filter.frequency.exponentialRampToValueAtTime(900, now + 0.24);
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.42, now + 0.018);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.26);
+      src.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+      src.start(now);
+      src.stop(now + 0.28);
+      soundsStarted++;
+      lastSound = 'paper';
+      return 'paper';
+    } catch (e) {
+      return false;
+    }
+  }
+
   function forgetCustomUrl() {
     if (customUrl) URL.revokeObjectURL(customUrl);
     customUrl = '';
@@ -404,6 +454,7 @@
     toggle() { return this.cycle() !== 'off'; },
     setSound(on) { cfg.sound = !!on; save(); if (on) playClick(); document.dispatchEvent(new CustomEvent('fairychange')); },
     preview() { return playClick(); },
+    playPaper() { return rustle(); },
     unlock() { unlockAudio(); },
     refreshCustom,
     setCustom(bytes, name, type) {

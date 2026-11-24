@@ -17,7 +17,7 @@ A scanned PDF with no text layer can run English text recognition, also on this 
 On a computer:
 
 - Drag a corner to turn a page, or use the arrows. Home and End jump to the ends.
-- The menu’s Page turn control, or `A`, turns the curl off. Instant jumps to the next sheet. That choice stays in this browser for every book.
+- The menu’s Page turn control, or `A`, turns the curl off. Instant jumps to the next sheet. That choice stays in this browser for every book. The same menu can play a short paper rustle when a page turns. It starts off.
 - A thin blue bar along the bottom shows how far through the book you are. Each chapter is a mark. Click or drag the bar to turn to that part. A finished chapter turns that mark green.
 - `/` searches. Each match glows on the page. Enter steps to the next glow. Quotes around a phrase look for those exact words.
 - `B` bookmarks the page. You can give it a label. `M` opens the list. Bookmarked pages get a red ribbon.

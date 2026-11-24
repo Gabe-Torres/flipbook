@@ -159,6 +159,37 @@ try {
   });
   if (!(jumped.to > jumped.from)) await fail('turning animation off did not jump to the next page');
   if (jumped.saved !== '0') await fail('instant page turns were not saved');
+  const paperStartsOff = await page.locator('#paperSound').isChecked();
+  if (paperStartsOff) await fail('paper sound should start off');
+  await page.click('#paperSound');
+  const paperOn = await page.evaluate(() => {
+    const before = window.Fairy.soundsStarted;
+    const from = window.__flipbook.current;
+    window.__flipbook.next();
+    return {
+      saved: localStorage.getItem('flipbook.paper'),
+      heard: window.Fairy.soundsStarted > before && window.Fairy.lastSound === 'paper',
+      moved: window.__flipbook.current > from
+    };
+  });
+  if (paperOn.saved !== '1' || !paperOn.heard || !paperOn.moved) await fail('paper sound did not play on a page turn: ' + JSON.stringify(paperOn));
+  const jumpQuiet = await page.evaluate(() => {
+    const before = window.Fairy.soundsStarted;
+    window.__flipbook.go(0, false);
+    return window.__flipbook.current === 0 && window.Fairy.soundsStarted === before;
+  });
+  if (!jumpQuiet) await fail('a long jump played the paper sound');
+  await page.click('#paperSound');
+  const paperOff = await page.evaluate(() => {
+    const before = window.Fairy.soundsStarted;
+    window.__flipbook.next();
+    return {
+      saved: localStorage.getItem('flipbook.paper'),
+      silent: window.Fairy.soundsStarted === before,
+      moved: window.__flipbook.current > 0
+    };
+  });
+  if (paperOff.saved === '1' || !paperOff.silent || !paperOff.moved) await fail('paper sound stayed on: ' + JSON.stringify(paperOff));
   await page.click('#animSeg [data-anim="on"]');
   await page.click('[data-close="menu"]');
   await page.evaluate(() => window.__flipbook.go(1, false));
