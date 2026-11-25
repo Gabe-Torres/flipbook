@@ -262,6 +262,22 @@ try {
   });
   await page.evaluate(() => window.__flipbook.go(1, false));
   await page.waitForFunction(() => window.__flipbook.current === 1 && !document.querySelector('#bookTitle .chapter') && document.title === 'Harbor Notes — Flipbook');
+  await page.click('[data-open="contents"]');
+  await page.click('#chapterList .jump');
+  await page.waitForFunction(() => {
+    const back = document.querySelector('#btnBack');
+    return window.__flipbook.current === 3 && back && !back.classList.contains('hidden') && back.textContent === 'Back to 2';
+  });
+  await page.keyboard.press('Backspace');
+  await page.waitForFunction(() => {
+    const msg = document.querySelector('#toast .msg');
+    return window.__flipbook.current === 1
+      && document.querySelector('#btnBack').classList.contains('hidden')
+      && msg && msg.textContent === 'Back to page 2';
+  });
+  await page.keyboard.press('Backspace');
+  await page.waitForFunction(() => window.__flipbook.current === 1);
+  await page.click('[data-close="contents"]');
 
   await page.fill('#searchInput', 'marigold');
   await page.waitForSelector('.result', { timeout: 10000 });
@@ -299,8 +315,14 @@ try {
   await page.press('#searchInput', 'Enter');
   await page.waitForFunction(() => {
     const glow = document.querySelector('#book .search-glow.current');
-    return glow && +glow.closest('.page').dataset.i === 5 && window.__flipbook.current === 5;
+    const back = document.querySelector('#btnBack');
+    return glow && +glow.closest('.page').dataset.i === 5 && window.__flipbook.current === 5
+      && back && !back.classList.contains('hidden') && back.textContent === 'Back to 2';
   });
+  await page.locator('#searchInput').evaluate((el) => el.blur());
+  await page.waitForFunction(() => document.activeElement !== document.querySelector('#searchInput'));
+  await page.keyboard.press('Backspace');
+  await page.waitForFunction(() => window.__flipbook.current === 1 && document.querySelector('#btnBack').classList.contains('hidden'));
   await shot('search_results.png');
   await page.locator('.result').first().click();
   await page.waitForFunction(() => window.__flipbook.current === 1);
@@ -322,6 +344,16 @@ try {
   await page.waitForSelector('.bmitem');
   const marks = await page.locator('#bmList').innerText();
   if (!marks.includes('Copper bell')) await fail('bookmark label missing before reload');
+  await page.evaluate(() => window.__flipbook.go(1, false));
+  await page.click('.bmitem .t');
+  await page.waitForFunction(() => {
+    const back = document.querySelector('#btnBack');
+    return window.__flipbook.current === 3 && back && !back.classList.contains('hidden') && back.textContent === 'Back to 2';
+  });
+  await page.click('#btnBack');
+  await page.waitForFunction(() => window.__flipbook.current === 1 && document.querySelector('#btnBack').classList.contains('hidden'));
+  await page.evaluate(() => window.__flipbook.go(3, false));
+  await page.waitForFunction(() => window.__flipbook.current === 3);
   await shot('bookmarks.png');
 
   await page.evaluate(async () => {

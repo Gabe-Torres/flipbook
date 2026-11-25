@@ -97,6 +97,7 @@ body.sb #stage{left:calc(170px + var(--sal))}
 .progress-tick.seen{background:var(--progress);opacity:1}
 .progress-tick.done{width:8px;height:8px;top:-3px;margin-left:-4px;border-radius:50%;background:var(--accent2);opacity:1}
 .progress-tip{position:absolute;bottom:14px;max-width:min(240px,70vw);padding:4px 8px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);color:var(--text);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;box-shadow:0 8px 24px var(--shadow)}
+.jumpback{position:fixed;left:max(12px,var(--sal));bottom:calc(var(--bottom) + 22px);z-index:26;height:36px;padding:0 14px;border-radius:18px;border:1px solid var(--line);background:var(--panel2);color:var(--text);font-weight:600;box-shadow:0 8px 24px var(--shadow)}
 @media (prefers-reduced-motion:reduce){.progress-fill{transition:none}}
 /* sheets & panels */
 .sheet{position:fixed;z-index:40;background:var(--panel);color:var(--text);display:flex;flex-direction:column}

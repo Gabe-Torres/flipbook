@@ -19,7 +19,7 @@ On a computer:
 - Drag a corner to turn a page, or use the arrows. Home and End jump to the ends.
 - The menu’s Page turn control, or `A`, turns the curl off. Instant jumps to the next sheet. That choice stays in this browser for every book. The same menu can play a short paper rustle when a page turns. It starts off.
 - A thin blue bar along the bottom shows how far through the book you are. Each chapter is a mark. Click or drag the bar to turn to that part. A finished chapter turns that mark green.
-- `/` searches. Each match glows on the page. Enter steps to the next glow. Quotes around a phrase look for those exact words.
+- `/` searches. Each match glows on the page. Enter steps to the next glow. Quotes around a phrase look for those exact words. After search, contents, or a bookmark moves you, Backspace returns to the page you left. A Back button names that page until you use it.
 - `B` bookmarks the page. You can give it a label. `M` opens the list. Bookmarked pages get a red ribbon.
 - `C` opens the contents. If the PDF has an outline, those chapters are listed, including nested ones, and a click turns to that page. A PDF with no outline says so. You can add your own chapters, with a title and a page number. A box beside a chapter marks it finished. Those stay in this browser with the book. The title bar names the chapter you are in, and it changes as you turn.
 - `H` opens highlights and notes. Highlight drags a rectangle on the page. Note places a sticky note. Both work on a scanned page. Read mode is for turning pages. Highlights and notes stay in this browser and are not written into the PDF.

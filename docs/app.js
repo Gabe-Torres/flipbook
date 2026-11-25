@@ -9,6 +9,7 @@
   let RATIO = 1.35;
   let epoch = 0;
   let bookmarks = [];
+  let returnPage = null;
   let recent = [];
   let bookId = '';
   let outline = [];
@@ -233,6 +234,29 @@
     renderMenu();
     if (SESSION && N) build(current);
     if (announce) toast(on ? 'Page turn animation on' : 'Pages turn instantly');
+  }
+  function showJumpBack() {
+    const btn = $('#btnBack');
+    if (!btn) return;
+    const on = returnPage != null;
+    btn.classList.toggle('hidden', !on);
+    if (!on) return;
+    btn.textContent = 'Back to ' + (returnPage + 1);
+    btn.setAttribute('aria-label', 'Back to page ' + (returnPage + 1));
+  }
+  function rememberJump(dest) {
+    dest = dest | 0;
+    if (dest === current || dest < 0 || dest >= N) return;
+    returnPage = current;
+    showJumpBack();
+  }
+  function jumpBack() {
+    if (returnPage == null) return;
+    const dest = returnPage;
+    returnPage = null;
+    showJumpBack();
+    go(dest, false);
+    toast('Back to page ' + (dest + 1));
   }
   function go(i, doAnim = true) {
     i = Math.max(0, Math.min(N - 1, i | 0));
@@ -611,7 +635,7 @@
       el.onclick = (e) => {
         if (e.target.closest('.edit')) { openBmDialog(p); return; }
         if (e.target.closest('.del')) { removeBookmark(p); return; }
-        go(p); if (phone) closeSheet('bookmarks');
+        rememberJump(p); go(p); if (phone) closeSheet('bookmarks');
       };
     });
   }
@@ -752,7 +776,7 @@
     activeSpot = (idx + delta + spots.length) % spots.length;
     const spot = spots[activeSpot];
     setActive(lastHits.findIndex((hit) => hit.i === spot.page));
-    if (spot.page !== current) go(spot.page, false);
+    if (spot.page !== current) { rememberJump(spot.page); go(spot.page, false); }
     paintSearchGlows();
     revealGlow(spot);
   }
@@ -791,7 +815,7 @@
     $$('.result', box).forEach((r) => {
       const i = +r.dataset.i;
       SESSION.getThumbUrl(i).then((url) => { if (myEpoch === epoch && url) r.querySelector('img').src = url; }).catch(() => {});
-      r.onclick = (e) => { e.stopPropagation(); addRecent(q); setActive(+r.dataset.k); const spot = searchSpots().findIndex((item) => item.page === +r.dataset.i); activeSpot = spot; go(+r.dataset.i); paintSearchGlows(); if (phone) closeSheet('search'); };
+      r.onclick = (e) => { e.stopPropagation(); addRecent(q); setActive(+r.dataset.k); const spot = searchSpots().findIndex((item) => item.page === +r.dataset.i); activeSpot = spot; rememberJump(+r.dataset.i); go(+r.dataset.i); paintSearchGlows(); if (phone) closeSheet('search'); };
     });
     paintSearchGlows();
   }
@@ -923,6 +947,8 @@
     $('.bb-prev').onclick = prev; $('.bb-next').onclick = next;
     $('.bb-page').onclick = () => openSheet('menu');
     $('#btnFirst').onclick = () => go(0, false); $('#btnLast').onclick = () => go(N - 1, false);
+    const back = $('#btnBack');
+    if (back) back.onclick = () => jumpBack();
     $('#btnSidebar').onclick = () => setSidebar($('#sidebar').classList.contains('hidden'));
     $('#btnZoom').onclick = () => zoomOpenAt(visiblePages()[0]);
     $('#btnFull').onclick = () => { if (document.fullscreenElement) document.exitFullscreen(); else if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {}); };
@@ -1028,6 +1054,7 @@
         case 'ArrowRight': case 'PageDown': case ' ': e.preventDefault(); next(); break;
         case 'ArrowLeft': case 'PageUp': e.preventDefault(); prev(); break;
         case 'Home': go(0, false); break;
+        case 'Backspace': if (returnPage != null) { e.preventDefault(); jumpBack(); } break;
         case 'End': go(N - 1, false); break;
         case '/': e.preventDefault(); openSheet('search'); break;
         case 'Enter': if (lastHits.length) { e.preventDefault(); stepSearch(1); } break;
@@ -1305,7 +1332,7 @@
         btn.innerHTML = `<span class="toc-label"></span><small></small>`;
         btn.querySelector('.toc-label').textContent = node.title;
         btn.querySelector('small').textContent = String(node.page + 1);
-        btn.onclick = () => { go(node.page, false); if (phone) closeSheet('contents'); };
+        btn.onclick = () => { rememberJump(node.page); go(node.page, false); if (phone) closeSheet('contents'); };
         row.append(doneToggle(key, node.title), btn);
         li.appendChild(row);
       }
@@ -1354,7 +1381,7 @@
       jump.innerHTML = '<span class="toc-label"></span><small></small>';
       jump.querySelector('.toc-label').textContent = ch.title;
       jump.querySelector('small').textContent = 'p. ' + (ch.page + 1);
-      jump.onclick = () => { go(ch.page, false); if (phone) closeSheet('contents'); };
+      jump.onclick = () => { rememberJump(ch.page); go(ch.page, false); if (phone) closeSheet('contents'); };
       const edit = document.createElement('button');
       edit.type = 'button';
       edit.className = 'mini';
@@ -1647,6 +1674,8 @@
     bookId = '';
     outline = [];
     chapters = [];
+    returnPage = null;
+    showJumpBack();
     doneKeys = new Set();
     annotations = [];
     annoMode = 'read';
